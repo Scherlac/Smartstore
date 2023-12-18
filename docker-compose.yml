@@ -1,29 +1,30 @@
 version: "3.4"
 services:
   web:
-    image: ghcr.io/smartstore/smartstore-linux
+    image: scherlac/smartstore-linux:latest
     container_name: web
     ports:
-      - "80:80"
+      - "5101:80"
+      - "5401:443"
     restart: unless-stopped
     depends_on:
       - db
     volumes:
-      - "D:/mount/smtenants/mysql:/app/App_Data/Tenants"
+      - "/opt/hosting/sclx/smart/app-data:/app/App_Data/Tenants"
   db:
     image: mysql
-    container_name: mysql
+    container_name: mysqlscx
     environment:
-      #MYSQL_DATABASE: smartstore
-      #MYSQL_USER: "root"
-      MYSQL_PASSWORD: "Smartstore2022!"
-      MYSQL_ROOT_PASSWORD: "Smartstore2022!"
+      # Server=mysqlscx; Database=smartscx; Uid=sqlrr; Pwd=Smartscx2023!
+      MYSQL_DATABASE: smartscx
+      MYSQL_USER: "sqlrr"
+      MYSQL_PASSWORD: "Smartscx2023!"
+      MYSQL_ROOT_PASSWORD: "Smartscx2023!"
+    restart: unless-stopped
     ports:
       - '3307:3306'
     expose:
       - '3306'
     volumes:
-      - mysql:/var/lib/mysql
+      - "/opt/hosting/sclx/smart/sql-data:/var/lib/mysql"
 
-volumes:
-  mysql:
