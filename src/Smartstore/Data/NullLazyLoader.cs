@@ -11,6 +11,12 @@ namespace Smartstore.Data
 
         public static NullLazyLoader Instance { get; } = new NullLazyLoader();
 
+
+        private bool _isLoaded;
+        public bool IsLoaded (object entity, string navigationName = "") {
+            return _isLoaded;
+        }
+
         public void Load(object entity, [CallerMemberName] string navigationName = "")
         {
         }
@@ -20,6 +26,7 @@ namespace Smartstore.Data
 
         public void SetLoaded(object entity, [CallerMemberName] string navigationName = "", bool loaded = true)
         {
+            _isLoaded = loaded;
         }
 
         public void Dispose()
