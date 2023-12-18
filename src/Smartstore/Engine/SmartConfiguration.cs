@@ -196,6 +196,11 @@ namespace Smartstore.Engine
             public bool ForwardProtoHeader { get; set; } = true;
 
             /// <summary>
+            /// Processes the X-Forwarded-Prefix header, which identifies the prefix (HTTP or HTTPS) the client used to connect.
+            /// </summary>
+            public bool ForwardPrefixHeader { get; set; } = true;
+
+            /// <summary>
             /// Processes the X-Forwarded-Host header, which identifies the original host requested by the client.
             /// </summary>
             public bool ForwardHostHeader { get; set; } = true;

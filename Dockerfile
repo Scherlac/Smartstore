@@ -3,20 +3,20 @@
 # the source within the container
 # -----------------------------------------------------------
 # Build Docker image
-FROM mcr.microsoft.com/dotnet/aspnet:7.0 AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:8.0-jammy AS runtime
 
 # Install wkhtmltopdf
 RUN apt update \
 	&& apt -y --no-install-recommends install \
 		curl \
-	&& curl -sSL https://github.com/wkhtmltopdf/packaging/releases/download/0.12.6-1/wkhtmltox_0.12.6-1.buster_amd64.deb \
-		-o /tmp/wkhtmltox_0.12.6-1.buster_amd64.deb \ 
+	&& curl -sSL https://github.com/wkhtmltopdf/packaging/releases/download/0.12.6.1-2/wkhtmltox_0.12.6.1-2.jammy_amd64.deb \
+		-o /tmp/wkhtmltox_0.12.6.1-2.jammy_amd64.deb \ 
 	&& apt -y --no-install-recommends install \
-		/tmp/wkhtmltox_0.12.6-1.buster_amd64.deb \
-	&& rm /tmp/wkhtmltox_0.12.6-1.buster_amd64.deb \
+		/tmp/wkhtmltox_0.12.6.1-2.jammy_amd64.deb \
+	&& rm /tmp/wkhtmltox_0.12.6.1-2.jammy_amd64.deb \
 	&& rm -rf /var/lib/apt/lists/*
 
-FROM mcr.microsoft.com/dotnet/sdk:7.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:8.0-jammy AS build
 
 # Copy solution and source
 ARG SOLUTION=Smartstore.sln

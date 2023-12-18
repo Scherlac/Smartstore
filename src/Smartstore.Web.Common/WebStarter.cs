@@ -129,9 +129,26 @@ namespace Smartstore.Web
                 {
                     app.UseForwardedHeaders(MapForwardedHeadersOptions(proxy));
                 }
-                
+
                 // Must come very early.
                 app.UseContextState();
+
+                // app.Use(async (context, next) =>
+                // {
+                //     if (context.Request.Headers.TryGetValue("X-Forwarded-Prefix", out var pathBase))
+                //     {
+                //         context.Request.PathBase = pathBase.Last();
+
+                //         if (context.Request.Path.StartsWithSegments(context.Request.PathBase, out var path))
+                //         {
+                //             context.Request.Path = path;
+                //         }
+                //     }
+
+                //     await next();
+                // });
+
+
             });
 
             builder.Configure(StarterOrdering.ExceptionHandlerMiddleware, app =>
@@ -239,6 +256,9 @@ namespace Smartstore.Web
             if (config.ForwardProtoHeader)
                 forwardedHeaders |= ForwardedHeaders.XForwardedProto;
 
+            if (config.ForwardPrefixHeader)
+                forwardedHeaders |= ForwardedHeaders.XForwardedPrefix;
+
             var options = new ForwardedHeadersOptions
             {
                 ForwardedHeaders = forwardedHeaders,
@@ -270,7 +290,7 @@ namespace Smartstore.Web
                     })
                     .Where(x => x != null)
                     .ToArray();
-                
+
                 options.KnownProxies.AddRange(addresses);
                 if (addresses.Length > 0)
                 {
