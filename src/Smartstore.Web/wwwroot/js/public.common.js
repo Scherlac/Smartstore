@@ -61,7 +61,7 @@
                 return;
             ctx.find("select:not(.noskin), input:hidden[data-select]").selectWrapper();
         },
-        // tooltips
+        // Tooltips
         function (ctx) {
             if ($.fn.tooltip === undefined)
                 return;
@@ -74,11 +74,25 @@
                 trigger: 'hover'
             });
         },
+        // Popovers
+        function (ctx) {
+            if ($.fn.popover === undefined)
+                return;
+            ctx.find(".popover-trigger").popover();
+        },
         // NumberInput
         function (ctx) {
             if ($.fn.numberInput === undefined)
                 return;
             ctx.find(".numberinput-group").numberInput();
+        },
+        // QuantityInput
+        function (ctx) {
+            ctx.find('.qty-input .numberinput').on("change", function () {
+                var el = $(this);
+                var qtyUnitName = el.val() > 1 && el.data("qtyunit-plural") ? el.data("qtyunit-plural") : el.data("qtyunit-singular");
+                el.closest(".qty-input").find(".numberinput-postfix").text(qtyUnitName);
+            });
         },
         // newsletter subsription
         function (ctx) {
@@ -163,7 +177,6 @@
                 var slidesToScroll = list.data("slides-to-scroll");
 
                 list.slick({
-                    infinite: false,
                     rtl: $("html").attr("dir") == "rtl",
                     dots: true,
                     cssEase: 'ease-in-out',
@@ -176,6 +189,8 @@
                     respondTo: 'slider',
                     slidesToShow: slidesToShow || 6,
                     slidesToScroll: slidesToScroll || 6,
+                    autoplay: list.data("autoplay"),
+                    infinite: list.data("infinite"),
                     responsive: [
                         {
                             breakpoint: 280,

@@ -149,8 +149,9 @@ namespace Smartstore.Web.Controllers
                         Services.ActivityLogger.LogActivity(KnownActivityLogTypes.PublicStoreLogin, T("ActivityLog.PublicStore.Login"), customer);
 
                         if (returnUrl.IsEmpty()
+                            || returnUrl == "/"
                             || returnUrl.Contains("/login?", StringComparison.OrdinalIgnoreCase)
-                            || returnUrl.Contains("/passwordrecoveryconfirm", StringComparison.OrdinalIgnoreCase)
+                            || returnUrl.Contains("/passwordrecovery", StringComparison.OrdinalIgnoreCase)
                             || returnUrl.Contains("/activation", StringComparison.OrdinalIgnoreCase)
                             || !Url.IsLocalUrl(returnUrl))
                         {
@@ -817,15 +818,9 @@ namespace Smartstore.Web.Controllers
                 customer.Company = model.Company;
             }
 
-            if (_customerSettings.DateOfBirthEnabled && model.DateOfBirthYear.HasValue)
+            if (_customerSettings.DateOfBirthEnabled && model.DateOfBirth.HasValue)
             {
-                try
-                {
-                    customer.BirthDate = new DateTime(model.DateOfBirthYear.Value, model.DateOfBirthMonth.Value, model.DateOfBirthDay.Value);
-                }
-                catch
-                {
-                }
+                customer.BirthDate = model.DateOfBirth;
             }
 
             if (_customerSettings.CustomerNumberMethod == CustomerNumberMethod.AutomaticallySet && customer.CustomerNumber.IsEmpty())

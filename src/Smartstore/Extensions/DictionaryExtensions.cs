@@ -18,9 +18,9 @@ namespace Smartstore
         /// if the key was not in the dictionary.</returns>
         public static TValue GetOrAdd<TKey, TValue>(this IDictionary<TKey, TValue> source, TKey key, Func<TKey, TValue> valueFactory)
         {
-            Guard.NotNull(source, nameof(source));
-            Guard.NotNull(key, nameof(key));
-            Guard.NotNull(valueFactory, nameof(valueFactory));
+            Guard.NotNull(source);
+            Guard.NotNull(key);
+            Guard.NotNull(valueFactory);
 
             if (source is ConcurrentDictionary<TKey, TValue> concurrentDict)
             {
@@ -159,9 +159,9 @@ namespace Smartstore
 
         public static IDictionary<TKey, TValue> Merge<TKey, TValue>(this IDictionary<TKey, TValue> instance, TKey key, Func<TValue> valueAccessor, bool replaceExisting = true)
         {
-            Guard.NotNull(instance, nameof(instance));
-            Guard.NotNull(key, nameof(key));
-            Guard.NotNull(valueAccessor, nameof(valueAccessor));
+            Guard.NotNull(instance);
+            Guard.NotNull(key);
+            Guard.NotNull(valueAccessor);
 
             if (replaceExisting || !instance.ContainsKey(key))
             {
@@ -174,13 +174,13 @@ namespace Smartstore
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static TValue Get<TKey, TValue>(this IDictionary<TKey, TValue> instance, TKey key)
         {
-            Guard.NotNull(instance, nameof(instance)).TryGetValue(key, out var val);
+            Guard.NotNull(instance).TryGetValue(key, out var val);
             return val;
         }
 
         public static bool TryGetValueAs<TValue>(this IDictionary<string, object> source, string key, out TValue value)
         {
-            Guard.NotNull(source, nameof(source));
+            Guard.NotNull(source);
 
             if (source.TryGetValue(key, out var obj) && obj is TValue typedValue)
             {
@@ -194,7 +194,7 @@ namespace Smartstore
 
         public static bool TryGetAndConvertValue<TValue>(this IDictionary<string, object> source, string key, out TValue value)
         {
-            Guard.NotNull(source, nameof(source));
+            Guard.NotNull(source);
 
             if (source.TryGetValue(key, out var obj) && ConvertUtility.TryConvert(obj, out value))
             {
@@ -207,7 +207,7 @@ namespace Smartstore
 
         public static ExpandoObject ToExpandoObject(this IDictionary<string, object> source, bool castIfPossible = false)
         {
-            Guard.NotNull(source, nameof(source));
+            Guard.NotNull(source);
 
             if (castIfPossible && source is ExpandoObject)
             {
@@ -234,7 +234,7 @@ namespace Smartstore
 
         internal static IDictionary<string, string> AddInValue(this IDictionary<string, string> instance, string key, char separator, string value, bool prepend = false)
         {
-            Guard.NotEmpty(key, nameof(key));
+            Guard.NotEmpty(key);
 
             value = value.Trim(separator);
 

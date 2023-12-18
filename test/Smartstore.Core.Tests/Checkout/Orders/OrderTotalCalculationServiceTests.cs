@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Net.Http;
 using System.Threading.Tasks;
 using Moq;
 using NUnit.Framework;
@@ -15,6 +16,7 @@ using Smartstore.Core.Checkout.Orders;
 using Smartstore.Core.Checkout.Shipping;
 using Smartstore.Core.Checkout.Tax;
 using Smartstore.Core.Common;
+using Smartstore.Core.Common.Configuration;
 using Smartstore.Core.Common.Services;
 using Smartstore.Core.Identity;
 using Smartstore.Core.Localization;
@@ -33,6 +35,7 @@ namespace Smartstore.Core.Tests.Checkout.Orders
         IDiscountService _discountService;
         IGiftCardService _giftCardService;
         ICurrencyService _currencyService;
+        IRoundingHelper _roundingHelper;
         ILocalizationService _localizationService;
         TaxSettings _taxSettings;
         RewardPointsSettings _rewardPointsSettings;
@@ -41,11 +44,13 @@ namespace Smartstore.Core.Tests.Checkout.Orders
         IOrderCalculationService _orderCalcService;
         ShippingSettings _shippingSettings;
         PriceSettings _priceSettings;
+        CurrencySettings _currencySettings;
         ICommonServices _services;
         IPriceCalculatorFactory _priceCalculatorFactory;
         ITaxCalculator _taxCalculator;
         IProductAttributeMaterializer _productAttributeMaterializer;
         ICheckoutAttributeMaterializer _checkoutAttributeMaterializer;
+        ViesTaxationHttpClient _client;
 
         IRequestCache _requestCache;
         ProductBatchContext _productBatchContext;
@@ -82,6 +87,7 @@ namespace Smartstore.Core.Tests.Checkout.Orders
                 .Setup(x => x.CreateProductBatchContext(It.IsAny<IEnumerable<Product>>(), null, _customer, false, false))
                 .Returns(new ProductBatchContext(new List<Product>(), _services, _store, _customer, false));
 
+            _currencySettings = new CurrencySettings();
             _rewardPointsSettings = new RewardPointsSettings();
             _priceSettings = new PriceSettings();
             _taxSettings = new TaxSettings
@@ -128,14 +134,18 @@ namespace Smartstore.Core.Tests.Checkout.Orders
             currencyServiceMock.Setup(x => x.PrimaryCurrency).Returns(_currency);
             currencyServiceMock.Setup(x => x.PrimaryExchangeCurrency).Returns(_currency);
 
+            _roundingHelper = new RoundingHelper(_workContext, _currencySettings);
+
+            _client = new ViesTaxationHttpClient(new HttpClient());
+
             var priceLabelService = new Mock<IPriceLabelService>();
 
             var localizationServiceMock = new Mock<ILocalizationService>();
             _localizationService = localizationServiceMock.Object;
 
             // INFO: no mocking here to use real implementation.
-            _taxService = new TaxService(DbContext, null, ProviderManager, _workContext, _localizationService, _taxSettings);
-            _taxCalculator = new TaxCalculator(DbContext, _workContext, _taxService, _taxSettings);
+            _taxService = new TaxService(DbContext, null, ProviderManager, _workContext, _roundingHelper, _localizationService, _taxSettings, _client);
+            _taxCalculator = new TaxCalculator(DbContext, _workContext, _roundingHelper, _taxService, _taxSettings);
 
             // INFO: Create real instance of PriceCalculatorFactory with own instances of Calculators
             _priceCalculatorFactory = new PriceCalculatorFactory(_requestCache, base.GetPriceCalculators(_priceCalculatorFactory, _discountService, _priceSettings));
@@ -147,8 +157,8 @@ namespace Smartstore.Core.Tests.Checkout.Orders
                 _shippingSettings,
                 ProviderManager,
                 null,
+                _roundingHelper,
                 _storeContext,
-                _workContext,
                 DbContext);
 
             _priceCalcService = new PriceCalculationService(
@@ -161,8 +171,10 @@ namespace Smartstore.Core.Tests.Checkout.Orders
                 _productAttributeMaterializer,
                 _taxService,
                 _currencyService,
+                _roundingHelper,
                 priceLabelService.Object,
                 _priceSettings,
+                _currencySettings,
                 _taxSettings);
 
             _orderCalcService = new OrderCalculationService(
@@ -173,6 +185,7 @@ namespace Smartstore.Core.Tests.Checkout.Orders
                 _shippingService,
                 _giftCardService,
                 _currencyService,
+                _roundingHelper,
                 _requestCache,
                 ProviderManager,
                 _checkoutAttributeMaterializer,

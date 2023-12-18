@@ -29,7 +29,7 @@ namespace Smartstore.Core.Common
 
         public Money(decimal amount, Currency currency, bool hideCurrency, string postFormat = null)
         {
-            Guard.NotNull(currency, nameof(currency));
+            Guard.NotNull(currency);
 
             Amount = amount;
             Currency = currency;
@@ -68,12 +68,16 @@ namespace Smartstore.Core.Common
         }
 
         /// <summary>
-        /// Rounds the amount to the number of significant decimal digits
-        /// of the associated currency using MidpointRounding.AwayFromZero.
+        /// Rounds the amount using <see cref="Currency.RoundNumDecimals"/> and <see cref="Currency.MidpointRounding"/>.
         /// </summary>
-        public decimal RoundedAmount
+        /// <remarks>
+        /// <see cref="RoundedAmount"/> is for display only. If an amount is to be rounded according to all currency settings and properties,
+        /// the amount rounded by IRoundingHelper must be passed to <see cref="Money"/>! In this case <see cref="Amount"/> and <see cref="RoundedAmount"/> are identical.
+        /// </remarks>
+        internal decimal RoundedAmount
         {
-            get => decimal.Round(Amount, DecimalDigits);
+            get => decimal.Round(Amount, DecimalDigits, 
+                Currency == null || Currency.MidpointRounding == CurrencyMidpointRounding.AwayFromZero ? MidpointRounding.AwayFromZero : MidpointRounding.ToEven);
         }
 
         /// <summary>
@@ -270,7 +274,9 @@ namespace Smartstore.Core.Common
         {
             if (Currency == null)
             {
-                return postFormat == null ? RoundedAmount.FormatInvariant() : string.Format(postFormat, RoundedAmount.FormatInvariant());
+                return postFormat == null 
+                    ? RoundedAmount.ToStringInvariant()
+                    : string.Format(postFormat, RoundedAmount.ToStringInvariant());
             }
 
             postFormat ??= PostFormat;
@@ -429,22 +435,6 @@ namespace Smartstore.Core.Common
 
         #region Exchange & Math
 
-        /// <summary>
-        /// Creates a new <see cref="Money"/> struct with <see cref="RoundedAmount"/> as <see cref="Amount"/>, 
-        /// but only if enabled for the currency or if <paramref name="force"/> is <c>true</c>.
-        /// </summary>
-        /// <param name="force">Round also if disabled for the currency</param>
-        /// <returns>A new instance with the rounded amount</returns>
-        public Money Round(bool force = false)
-        {
-            if (Currency != null && (force || Currency.RoundOrderItemsEnabled))
-            {
-                return WithAmount(RoundedAmount);
-            }
-
-            return this;
-        }
-
         //public Money ExchangeTo(Currency toCurrency)
         //{
         //    if (Currency == toCurrency || Amount == 0)
@@ -474,8 +464,8 @@ namespace Smartstore.Core.Common
         /// <param name="exchangeCurrency">Primary exchange currency.</param>
         public Money ExchangeTo(Currency toCurrency, Currency exchangeCurrency)
         {
-            Guard.NotNull(toCurrency, nameof(toCurrency));
-            Guard.NotNull(exchangeCurrency, nameof(exchangeCurrency));
+            Guard.NotNull(toCurrency);
+            Guard.NotNull(exchangeCurrency);
 
             if (Currency == toCurrency)
                 return this;

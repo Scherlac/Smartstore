@@ -1,6 +1,4 @@
-﻿using System.Dynamic;
-using System.Globalization;
-using Microsoft.AspNetCore.Http;
+﻿using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Smartstore.ComponentModel;
 using Smartstore.Core.Catalog;
@@ -55,7 +53,7 @@ namespace Smartstore.Web.Models.Cart
             bool setEstimateShippingDefaultAddress = true,
             bool prepareAndDisplayOrderReviewData = false)
         {
-            dynamic parameters = new ExpandoObject();
+            dynamic parameters = new GracefulDynamicObject();
             parameters.IsEditable = isEditable;
             parameters.ValidateCheckoutAttributes = validateCheckoutAttributes;
             parameters.PrepareEstimateShippingIfEnabled = prepareEstimateShippingIfEnabled;
@@ -331,20 +329,13 @@ namespace Smartstore.Web.Models.Cart
 
                     case AttributeControlType.Datepicker:
                     {
-                        // Keep in mind my that the code below works only in the current culture.
                         var enteredDate = selectedCheckoutAttributes.AttributesMap
                             .Where(x => x.Key == attribute.Id)
                             .SelectMany(x => x.Value)
                             .FirstOrDefault()?
                             .ToString();
 
-                        if (enteredDate.HasValue()
-                            && DateTime.TryParseExact(enteredDate, "D", CultureInfo.CurrentCulture, DateTimeStyles.None, out var selectedDate))
-                        {
-                            caModel.SelectedDay = selectedDate.Day;
-                            caModel.SelectedMonth = selectedDate.Month;
-                            caModel.SelectedYear = selectedDate.Year;
-                        }
+                        caModel.SelectedDate = enteredDate?.ToDateTime(null);
                     }
                     break;
 
@@ -432,17 +423,15 @@ namespace Smartstore.Web.Models.Cart
             var batchContext = _productService.CreateProductBatchContext(allProducts, null, customer, false);
             var subtotal = await _orderCalculationService.GetShoppingCartSubtotalAsync(from, null, batchContext);
 
-            dynamic itemParameters = new ExpandoObject();
-            itemParameters.TaxFormat = _taxService.GetTaxFormat();
+            dynamic itemParameters = new GracefulDynamicObject();
+            itemParameters.TaxFormat = parameters?.IsOffcanvas == true ? _taxService.GetTaxFormat() : null;
             itemParameters.BatchContext = batchContext;
             itemParameters.CartSubtotal = subtotal;
 
             foreach (var cartItem in from.Items)
             {
                 var model = new ShoppingCartModel.ShoppingCartItemModel();
-
                 await cartItem.MapAsync(model, (object)itemParameters);
-
                 to.AddItems(model);
             }
 

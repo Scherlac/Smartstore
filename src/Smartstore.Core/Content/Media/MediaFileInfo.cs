@@ -32,6 +32,8 @@ namespace Smartstore.Core.Content.Media
 
         private void Initialize(MediaFile file, string directory)
         {
+            Guard.NotNull(file);
+
             File = file;
             Directory = directory.EmptyNull();
 
@@ -229,6 +231,7 @@ namespace Smartstore.Core.Content.Media
         public Size Size
         {
             get => _size;
+            internal set => _size = value;
         }
 
         /// <inheritdoc/>

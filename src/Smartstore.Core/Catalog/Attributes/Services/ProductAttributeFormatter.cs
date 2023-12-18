@@ -1,4 +1,6 @@
-﻿using Smartstore.Core.Catalog.Pricing;
+﻿using System.Globalization;
+using System.Runtime.CompilerServices;
+using Smartstore.Core.Catalog.Pricing;
 using Smartstore.Core.Catalog.Products;
 using Smartstore.Core.Checkout.Cart;
 using Smartstore.Core.Checkout.GiftCards;
@@ -42,7 +44,8 @@ namespace Smartstore.Core.Catalog.Attributes
             _priceSettings = priceSettings;
         }
 
-        public virtual async Task<string> FormatAttributesAsync(
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public Task<string> FormatAttributesAsync(
             ProductVariantAttributeSelection selection,
             Product product,
             Customer customer = null,
@@ -54,152 +57,225 @@ namespace Smartstore.Core.Catalog.Attributes
             bool includeHyperlinks = true,
             ProductBatchContext batchContext = null)
         {
-            Guard.NotNull(selection, nameof(selection));
-            Guard.NotNull(product, nameof(product));
+            var options = new ProductAttributeFormatOptions
+            {
+                ItemSeparator = separator,
+                HtmlEncode = htmlEncode,
+                IncludePrices = includePrices,
+                IncludeProductAttributes = includeProductAttributes,
+                IncludeGiftCardAttributes=includeGiftCardAttributes,
+                IncludeHyperlinks = includeHyperlinks
+            };
+
+            return FormatAttributesAsync(selection, product, options, customer, batchContext);
+        }
+
+        public virtual async Task<string> FormatAttributesAsync(
+            ProductVariantAttributeSelection selection,
+            Product product,
+            ProductAttributeFormatOptions options,
+            Customer customer = null,
+            ProductBatchContext batchContext = null)
+        {
+            Guard.NotNull(selection);
+            Guard.NotNull(product);
+            Guard.NotNull(options);
 
             customer ??= _workContext.CurrentCustomer;
 
-            using var pool = StringBuilderPool.Instance.Get(out var result);
+            using var psb = StringBuilderPool.Instance.Get(out var sb);
 
-            if (includeProductAttributes)
+            if (options.IncludeProductAttributes)
             {
-                var languageId = _workContext.WorkingLanguage.Id;
+                var language = _workContext.WorkingLanguage;
                 var attributes = await _productAttributeMaterializer.MaterializeProductVariantAttributesAsync(selection);
 
                 // Key: ProductVariantAttributeValue.Id, value: calculated attribute price adjustment.
-                var priceAdjustments = includePrices && _priceSettings.ShowVariantCombinationPriceAdjustment
+                var priceAdjustments = options.IncludePrices && _priceSettings.ShowVariantCombinationPriceAdjustment
                     ? await _priceCalculationService.CalculateAttributePriceAdjustmentsAsync(product, selection, 1, _priceCalculationService.CreateDefaultOptions(false, customer, null, batchContext))
                     : new Dictionary<int, CalculatedPriceAdjustment>();
 
                 foreach (var pva in attributes)
                 {
-                    var pair = selection.AttributesMap.FirstOrDefault(x => x.Key == pva.Id);
-                    if (pair.Key == 0)
+                    if (TryGenerateVariantTokens(pva, selection, priceAdjustments, options, out var tokens))
                     {
-                        continue;
-                    }
-
-                    foreach (var value in pair.Value)
-                    {
-                        var valueStr = value.ToString().EmptyNull();
-                        var pvaAttribute = string.Empty;
-
-                        if (pva.IsListTypeAttribute())
+                        foreach (var t in tokens)
                         {
-                            var pvaValue = pva.ProductVariantAttributeValues.FirstOrDefault(x => x.Id == valueStr.ToInt());
-                            if (pvaValue != null)
+                            if (t.Price.HasValue())
                             {
-                                pvaAttribute = $"{pva.ProductAttribute.GetLocalized(x => x.Name, languageId)}: {pvaValue.GetLocalized(x => x.Name, languageId)}";
-
-                                if (includePrices)
-                                {
-                                    if (_shoppingCartSettings.ShowLinkedAttributeValueQuantity &&
-                                        pvaValue.ValueType == ProductVariantAttributeValueType.ProductLinkage &&
-                                        pvaValue.Quantity > 1)
-                                    {
-                                        pvaAttribute = pvaAttribute + " × " + pvaValue.Quantity;
-                                    }
-
-                                    if (priceAdjustments.TryGetValue(pvaValue.Id, out var adjustment))
-                                    {
-                                        if (adjustment.Price > 0)
-                                        {
-                                            pvaAttribute += $" (+{adjustment.Price})";
-                                        }
-                                        else if (adjustment.Price < 0)
-                                        {
-                                            pvaAttribute += $" (-{adjustment.Price * -1})";
-                                        }
-                                    }
-                                }
-
-                                if (htmlEncode)
-                                {
-                                    pvaAttribute = pvaAttribute.HtmlEncode();
-                                }
+                                t.Value += options.PriceFormatTemplate.FormatInvariant(t.Price);
                             }
+
+                            var formattedItem = options.FormatTemplate.FormatInvariant(t.Name, t.Value);
+
+                            // Append formatted item to StringBuilder.
+                            sb.Grow(formattedItem, options.ItemSeparator);
                         }
-                        else if (pva.AttributeControlType == AttributeControlType.MultilineTextbox)
-                        {
-                            string attributeName = pva.ProductAttribute.GetLocalized(x => x.Name, languageId);
-                            pvaAttribute = $"{(htmlEncode ? attributeName.HtmlEncode() : attributeName)}: {HtmlUtility.ConvertPlainTextToHtml(valueStr.HtmlEncode())}";
-                        }
-                        else if (pva.AttributeControlType == AttributeControlType.FileUpload)
-                        {
-                            if (Guid.TryParse(valueStr, out var downloadGuid) && downloadGuid != Guid.Empty)
-                            {
-                                var download = await _db.Downloads
-                                    .AsNoTracking()
-                                    .Include(x => x.MediaFile)
-                                    .Where(x => x.DownloadGuid == downloadGuid)
-                                    .FirstOrDefaultAsync();
-
-                                if (download?.MediaFile != null)
-                                {
-                                    var attributeText = string.Empty;
-                                    var fileName = htmlEncode
-                                        ? download.MediaFile.Name.HtmlEncode()
-                                        : download.MediaFile.Name;
-
-                                    if (includeHyperlinks)
-                                    {
-                                        // TODO: (core) add a method for getting URL (use routing because it handles all SEO friendly URLs).
-                                        var downloadLink = _webHelper.GetStoreLocation() + "download/getfileupload/?downloadId=" + download.DownloadGuid;
-                                        attributeText = $"<a href='{downloadLink}' class='fileuploadattribute'>{fileName}</a>";
-                                    }
-                                    else
-                                    {
-                                        attributeText = fileName;
-                                    }
-
-                                    string attributeName = pva.ProductAttribute.GetLocalized(a => a.Name, languageId);
-                                    pvaAttribute = $"{(htmlEncode ? attributeName.HtmlEncode() : attributeName)}: {attributeText}";
-                                }
-                            }
-                        }
-                        else
-                        {
-                            // TextBox, Datepicker
-                            pvaAttribute = $"{pva.ProductAttribute.GetLocalized(x => x.Name, languageId)}: {valueStr}";
-
-                            if (htmlEncode)
-                            {
-                                pvaAttribute = pvaAttribute.HtmlEncode();
-                            }
-                        }
-
-                        result.Grow(pvaAttribute, separator);
                     }
                 }
             }
 
-            if (includeGiftCardAttributes && product.IsGiftCard)
+            if (options.IncludeGiftCardAttributes && product.IsGiftCard)
             {
                 var gci = selection.GetGiftCardInfo();
                 if (gci != null)
                 {
-                    // Sender.
-                    var giftCardFrom = product.GiftCardType == GiftCardType.Virtual
-                        ? _localizationService.GetResource("GiftCardAttribute.From.Virtual").FormatInvariant(gci.SenderName, gci.SenderEmail)
-                        : _localizationService.GetResource("GiftCardAttribute.From.Physical").FormatInvariant(gci.SenderName);
+                    var cardType = product.GiftCardType.ToString();
 
-                    // Recipient.
-                    var giftCardFor = product.GiftCardType == GiftCardType.Virtual
-                        ? _localizationService.GetResource("GiftCardAttribute.For.Virtual").FormatInvariant(gci.RecipientName, gci.RecipientEmail)
-                        : _localizationService.GetResource("GiftCardAttribute.For.Physical").FormatInvariant(gci.RecipientName);
+                    // Sender
+                    var senderName = TryEncode(_localizationService.GetResource($"GiftCardAttribute.From.{cardType}"));
+                    var senderValue = TryEncode(product.GiftCardType == GiftCardType.Physical ? gci.SenderName : $"{gci.SenderName} <{gci.SenderEmail}>");
+                    sb.Grow(options.FormatTemplate.FormatInvariant(senderName, senderValue), options.ItemSeparator);
 
-                    if (htmlEncode)
-                    {
-                        giftCardFrom = giftCardFrom.HtmlEncode();
-                        giftCardFor = giftCardFor.HtmlEncode();
-                    }
-
-                    result.Grow(giftCardFrom, separator);
-                    result.Grow(giftCardFor, separator);
+                    // Recipient
+                    var recipientName = TryEncode(_localizationService.GetResource($"GiftCardAttribute.For.{cardType}"));
+                    var recipientValue = TryEncode(product.GiftCardType == GiftCardType.Physical ? gci.RecipientName : $"{gci.RecipientName} <{gci.RecipientEmail}>");
+                    sb.Grow(options.FormatTemplate.FormatInvariant(recipientName, recipientValue), options.ItemSeparator);
                 }
             }
 
-            return result.ToString();
+            return sb.ToString();
+
+            string TryEncode(string input)
+            {
+                return options.HtmlEncode ? input.HtmlEncode() : input;
+            }
+        }
+
+        private bool TryGenerateVariantTokens(
+            ProductVariantAttribute pva,
+            ProductVariantAttributeSelection selection,
+            IDictionary<int, CalculatedPriceAdjustment> priceAdjustments,
+            ProductAttributeFormatOptions options,
+            out List<VariantToken> tokens)
+        {
+            tokens = new();
+
+            var pair = selection.AttributesMap.FirstOrDefault(x => x.Key == pva.Id);
+            if (pair.Key == 0)
+            {
+                return false;
+            }
+
+            var language = _workContext.WorkingLanguage;
+
+            foreach (var attrValue in pair.Value)
+            {
+                var valueStr = attrValue.ToString().EmptyNull();
+
+                if (pva.IsListTypeAttribute())
+                {
+                    var pvaValue = pva.ProductVariantAttributeValues.FirstOrDefault(x => x.Id == valueStr.ToInt());
+                    if (pvaValue != null)
+                    {
+                        var name = TryEncode(pva.ProductAttribute.GetLocalized(x => x.Name, language.Id));
+                        var value = TryEncode(pvaValue.GetLocalized(x => x.Name, language.Id));
+                        string price = null;
+
+                        if (options.IncludePrices)
+                        {
+                            if (_shoppingCartSettings.ShowLinkedAttributeValueQuantity &&
+                                pvaValue.ValueType == ProductVariantAttributeValueType.ProductLinkage &&
+                                pvaValue.Quantity > 1)
+                            {
+                                value = value + " × " + pvaValue.Quantity;
+                            }
+
+                            if (priceAdjustments.TryGetValue(pvaValue.Id, out var adjustment))
+                            {
+                                if (adjustment.Price > 0)
+                                {
+                                    price = $"+{adjustment.Price}";
+                                }
+                                else if (adjustment.Price < 0)
+                                {
+                                    price = $"-{adjustment.Price * -1}";
+                                }
+                            }
+                        }
+
+                        AddToken(tokens, name, value, price);
+                    }
+                }
+                else if (pva.AttributeControlType == AttributeControlType.MultilineTextbox)
+                {
+                    AddToken(tokens, TryEncode(pva.ProductAttribute.GetLocalized(x => x.Name, language.Id)), HtmlUtility.ConvertPlainTextToHtml(valueStr.HtmlEncode()));
+                }
+                else if (pva.AttributeControlType == AttributeControlType.FileUpload)
+                {
+                    if (Guid.TryParse(valueStr, out var downloadGuid) && downloadGuid != Guid.Empty)
+                    {
+                        var download = _db.Downloads
+                            .AsNoTracking()
+                            .Include(x => x.MediaFile)
+                            .Where(x => x.DownloadGuid == downloadGuid)
+                            .FirstOrDefault();
+
+                        if (download?.MediaFile != null)
+                        {
+                            var attributeText = string.Empty;
+                            var fileName = options.HtmlEncode
+                                ? download.MediaFile.Name.HtmlEncode()
+                                : download.MediaFile.Name;
+
+                            if (options.IncludeHyperlinks)
+                            {
+                                // TODO: (core) add a method for getting URL (use routing because it handles all SEO friendly URLs).
+                                var downloadLink = _webHelper.GetStoreLocation() + "download/getfileupload/?downloadId=" + download.DownloadGuid;
+                                attributeText = $"<a href='{downloadLink}' class='fileuploadattribute'>{fileName}</a>";
+                            }
+                            else
+                            {
+                                attributeText = fileName;
+                            }
+
+                            AddToken(tokens, TryEncode(pva.ProductAttribute.GetLocalized(x => x.Name, language.Id)), attributeText);
+                        }
+                    }
+                }
+                else
+                {
+                    // TextBox, Datepicker
+                    if (pva.AttributeControlType == AttributeControlType.Datepicker)
+                    {
+                        var culture = CommonHelper.TryAction(() => new CultureInfo(language.LanguageCulture));
+                        valueStr = valueStr.ToDateTime(null)?.ToString("D", culture) ?? valueStr;
+                    }
+
+                    AddToken(tokens, TryEncode(pva.ProductAttribute.GetLocalized(x => x.Name, language.Id)), TryEncode(valueStr));
+                }
+            }
+
+            return tokens.Count > 0;
+
+            string TryEncode(string input)
+            {
+                return options.HtmlEncode ? input.HtmlEncode() : input;
+            }
+        }
+
+        private static bool AddToken(List<VariantToken> tokens, string name, string value, string price = null)
+        {
+            if (name.HasValue() && value.HasValue())
+            {
+                tokens.Add(new()
+                {
+                    Name = name,
+                    Value = value,
+                    Price = price
+                });
+
+                return true;
+            }
+
+            return false;
+        }
+
+        class VariantToken
+        {
+            public string Name { get; set; }
+            public string Value { get; set; }
+            public string Price { get; set; }
         }
     }
 }

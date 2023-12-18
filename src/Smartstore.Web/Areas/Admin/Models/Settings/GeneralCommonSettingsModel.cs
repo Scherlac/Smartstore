@@ -129,6 +129,11 @@ namespace Smartstore.Admin.Models
             [AdditionalMetadata("rows", 10)]
             public string ExtraRobotsAllows { get; set; }
 
+            [LocalizedDisplay("*ExtraRobotsLines")]
+            [UIHint("Textarea")]
+            [AdditionalMetadata("rows", 10)]
+            public string ExtraRobotsLines { get; set; }
+
             [LocalizedDisplay("*XmlSitemapEnabled")]
             public bool XmlSitemapEnabled { get; set; }
 
@@ -256,6 +261,9 @@ namespace Smartstore.Admin.Models
 
             [LocalizedDisplay("*DisplayRegionInLanguageSelector")]
             public bool DisplayRegionInLanguageSelector { get; set; }
+
+            [LocalizedDisplay("*UseNativeNameInLanguageSelector")]
+            public bool UseNativeNameInLanguageSelector { get; set; }
         }
 
         [LocalizedDisplay("Admin.Configuration.Settings.GeneralCommon.CompanyInformationSettings.")]

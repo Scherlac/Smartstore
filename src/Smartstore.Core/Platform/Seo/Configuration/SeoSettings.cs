@@ -126,6 +126,7 @@ namespace Smartstore.Core.Seo
 
         public List<string> ExtraRobotsDisallows { get; set; }
         public List<string> ExtraRobotsAllows { get; set; }
+        public string ExtraRobotsLines { get; set; }
 
         /// <summary>
         /// A value indicating whether to load all URL records and active slugs on application startup
@@ -173,7 +174,7 @@ namespace Smartstore.Core.Seo
         {
             var map = new Dictionary<char, string>();
 
-            foreach (var conversion in charConversion.GetLines(true, true))
+            foreach (var conversion in charConversion.ReadLines(true, true))
             {
                 if (conversion.SplitToPair(out var left, out var right, ";") && left.HasValue())
                 {

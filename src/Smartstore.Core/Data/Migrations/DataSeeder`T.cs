@@ -27,12 +27,12 @@ namespace Smartstore.Core.Data.Migrations
         }
 
         /// <inheritdoc/>
-        public bool RollbackOnFailure => false;
+        public virtual DataSeederStage Stage => DataSeederStage.Late;
 
         /// <inheritdoc/>
         public Task SeedAsync(TContext context, CancellationToken cancelToken = default)
         {
-            Context = Guard.NotNull(context, nameof(context));
+            Context = Guard.NotNull(context);
             CancelToken = cancelToken;
 
             return SeedCoreAsync();
@@ -110,7 +110,7 @@ namespace Smartstore.Core.Data.Migrations
 
         protected async Task PopulateAsync(string stage, Func<Task> populateAction)
         {
-            Guard.NotNull(populateAction, nameof(populateAction));
+            Guard.NotNull(populateAction);
 
             try
             {
@@ -147,8 +147,8 @@ namespace Smartstore.Core.Data.Migrations
         protected async Task PopulateUrlRecordsFor<T>(IEnumerable<T> entities, Func<T, UrlRecord> factory)
             where T : BaseEntity, ISlugSupported, new()
         {
-            Guard.NotNull(entities, nameof(entities));
-            Guard.NotNull(factory, nameof(factory));
+            Guard.NotNull(entities);
+            Guard.NotNull(factory);
 
             using var scope = UrlService.CreateBatchScope();
 

@@ -17,7 +17,6 @@ using Smartstore.Core.Catalog.Search.Modelling;
 using Smartstore.Core.Content.Media;
 using Smartstore.Core.Content.Media.Storage;
 using Smartstore.Core.DataExchange.Import;
-using Smartstore.Core.Seo;
 using Smartstore.Domain;
 using Smartstore.IO;
 using Smartstore.Web.Api.Models.Catalog;
@@ -29,35 +28,35 @@ namespace Smartstore.Web.Api.Controllers
     /// </summary>
     public class ProductsController : WebApiController<Product>
     {
-        private readonly Lazy<IUrlService> _urlService;
         private readonly Lazy<ICatalogSearchService> _catalogSearchService;
         private readonly Lazy<ICatalogSearchQueryFactory> _catalogSearchQueryFactory;
         private readonly Lazy<IPriceCalculationService> _priceCalculationService;
         private readonly Lazy<IProductAttributeService> _productAttributeService;
         private readonly Lazy<IProductTagService> _productTagService;
+        private readonly Lazy<IProductService> _productService;
         private readonly Lazy<IDiscountService> _discountService;
         private readonly Lazy<IMediaImporter> _mediaImporter;
         private readonly Lazy<IWebApiService> _webApiService;
         private readonly Lazy<SearchSettings> _searchSettings;
 
         public ProductsController(
-            Lazy<IUrlService> urlService,
             Lazy<ICatalogSearchService> catalogSearchService,
             Lazy<ICatalogSearchQueryFactory> catalogSearchQueryFactory,
             Lazy<IPriceCalculationService> priceCalculationService,
             Lazy<IProductAttributeService> productAttributeService,
             Lazy<IProductTagService> productTagService,
+            Lazy<IProductService> productService,
             Lazy<IDiscountService> discountService,
             Lazy<IMediaImporter> mediaImporter,
             Lazy<IWebApiService> webApiService,
             Lazy<SearchSettings> searchSettings)
         {
-            _urlService = urlService;
             _catalogSearchService = catalogSearchService;
             _catalogSearchQueryFactory = catalogSearchQueryFactory;
             _priceCalculationService = priceCalculationService;
             _productAttributeService = productAttributeService;
             _productTagService = productTagService;
+            _productService = productService;
             _discountService = discountService;
             _mediaImporter = mediaImporter;
             _webApiService = webApiService;
@@ -185,7 +184,7 @@ namespace Smartstore.Web.Api.Controllers
             return PostAsync(model, async () =>
             {
                 await Db.SaveChangesAsync();
-                await UpdateSlug(model);
+                await UpdateSlugAsync(model);
             });
         }
 
@@ -196,7 +195,7 @@ namespace Smartstore.Web.Api.Controllers
             return PutAsync(key, model, async (entity) =>
             {
                 await Db.SaveChangesAsync();
-                await UpdateSlug(entity);
+                await UpdateSlugAsync(entity);
             });
         }
 
@@ -207,7 +206,7 @@ namespace Smartstore.Web.Api.Controllers
             return PatchAsync(key, model, async (entity) =>
             {
                 await Db.SaveChangesAsync();
-                await UpdateSlug(entity);
+                await UpdateSlugAsync(entity);
             });
         }
 
@@ -339,50 +338,6 @@ namespace Smartstore.Web.Api.Controllers
         }
 
         #region Actions and functions
-
-        /// <summary>
-        /// Searches for products.
-        /// </summary>
-        [HttpPost("Products/Search")]
-        [ApiQueryable(AllowedQueryOptions = AllowedQueryOptions.Expand | AllowedQueryOptions.Count | AllowedQueryOptions.Select, EnsureStableOrdering = false)]
-        [Permission(Permissions.Catalog.Product.Read)]
-        [Produces(Json)]
-        [ProducesResponseType(typeof(IQueryable<Product>), Status200OK)]
-        [ProducesResponseType(Status422UnprocessableEntity)]
-        public async Task<IActionResult> Search([FromQuery] CatalogSearchQueryModel model)
-        {
-            // INFO: "Search" needs to be POST otherwise "... is not a valid OData path template. Bad Request - Error in query syntax".
-            // INFO: "EnsureStableOrdering" must be "false" otherwise CatalogSearchQuery. Sorting is getting lost.
-            // INFO: we cannot fully satisfy both: catalog search options and OData query options. Catalog search has priority here.
-
-            try
-            {
-                if (model.Term == null || model.Term.Length < _searchSettings.Value.InstantSearchTermMinLength)
-                {
-                    return BadRequest($"The minimum length for the search term is {_searchSettings.Value.InstantSearchTermMinLength} characters.");
-                }
-
-                var state = _webApiService.Value.GetState();
-                var searchQuery = await _catalogSearchQueryFactory.Value.CreateFromQueryAsync();
-
-                searchQuery = searchQuery
-                    .BuildFacetMap(false)
-                    .CheckSpelling(0)
-                    .Slice(searchQuery.Skip, Math.Min(searchQuery.Take, state.MaxTop))
-                    .UseHitsFactory((set, ids) => Entities.SelectSummary().GetManyAsync(ids, true));
-
-                var searchResult = await _catalogSearchService.Value.SearchAsync(searchQuery);
-                //$"term:{model.Term.NaIfEmpty()} skip:{searchQuery.Skip} take:{searchQuery.Take} hits:{searchResult.HitsEntityIds.Length} total:{searchResult.TotalHitsCount}".Dump();
-
-                var hits = await searchResult.GetHitsAsync();
-
-                return Ok(hits.AsQueryable());
-            }
-            catch (Exception ex)
-            {
-                return ErrorResult(ex);
-            }
-        }
 
         /// <summary>
         /// Adds or removes assigments to product tags.
@@ -804,6 +759,128 @@ namespace Smartstore.Web.Api.Controllers
             }
         }
 
+        /// <summary>
+        /// Searches for products.
+        /// </summary>
+        [HttpPost("Products/Search")]
+        [ApiQueryable(AllowedQueryOptions = AllowedQueryOptions.Expand | AllowedQueryOptions.Count | AllowedQueryOptions.Select, EnsureStableOrdering = false)]
+        [Permission(Permissions.Catalog.Product.Read)]
+        [Produces(Json)]
+        [ProducesResponseType(typeof(IQueryable<Product>), Status200OK)]
+        [ProducesResponseType(Status422UnprocessableEntity)]
+        public async Task<IActionResult> Search([FromQuery] CatalogSearchQueryModel model)
+        {
+            // INFO: "Search" needs to be POST otherwise "... is not a valid OData path template. Bad Request - Error in query syntax".
+            // INFO: "EnsureStableOrdering" must be "false" otherwise CatalogSearchQuery. Sorting is getting lost.
+            // INFO: we cannot fully satisfy both: catalog search options and OData query options. Catalog search has priority here.
+
+            try
+            {
+                if (model.Term == null || model.Term.Length < _searchSettings.Value.InstantSearchTermMinLength)
+                {
+                    return BadRequest($"The minimum length for the search term is {_searchSettings.Value.InstantSearchTermMinLength} characters.");
+                }
+
+                var state = _webApiService.Value.GetState();
+                var searchQuery = await _catalogSearchQueryFactory.Value.CreateFromQueryAsync();
+
+                searchQuery = searchQuery
+                    .BuildFacetMap(false)
+                    .CheckSpelling(0)
+                    .Slice(searchQuery.Skip, Math.Min(searchQuery.Take, state.MaxTop))
+                    .UseHitsFactory((set, ids) => Entities.SelectSummary().GetManyAsync(ids, true));
+
+                var searchResult = await _catalogSearchService.Value.SearchAsync(searchQuery);
+                //$"term:{model.Term.NaIfEmpty()} skip:{searchQuery.Skip} take:{searchQuery.Take} hits:{searchResult.HitsEntityIds.Length} total:{searchResult.TotalHitsCount}".Dump();
+
+                var hits = await searchResult.GetHitsAsync();
+
+                return Ok(hits.AsQueryable());
+            }
+            catch (Exception ex)
+            {
+                return ErrorResult(ex);
+            }
+        }
+
+        /// <summary>
+        /// Gets the soft-deleted products of the recycle bin.
+        /// </summary>
+        /// <remarks>
+        /// Can only be used in conjunction with the methods **Restore** and **DeletePermanent** because soft-deleted products are excluded from other endpoints.
+        /// </remarks>
+        [HttpGet("Products/RecycleBin"), ApiQueryable]
+        [Permission(Permissions.Catalog.Product.Read)]
+        [Produces(Json)]
+        [ProducesResponseType(typeof(IQueryable<Product>), Status200OK)]
+        public IQueryable<Product> RecycleBin()
+        {
+            return Entities
+                .AsNoTracking()
+                .IgnoreQueryFilters()
+                .Where(x => x.Deleted);
+        }
+
+        /// <summary>
+        /// Permanently deletes soft-deleted products.
+        /// </summary>
+        /// <param name="productIds">
+        /// Identifiers of products to be permanently deleted.
+        /// Use an empty list to delete all soft-deleted products (empty recycle bin).
+        /// </param>
+        [HttpPost("Products/DeletePermanent")]
+        [Permission(Permissions.Catalog.Product.Delete)]
+        [Consumes(Json), Produces(Json)]
+        [ProducesResponseType(typeof(DeletionResult), Status200OK)]
+        [ProducesResponseType(Status422UnprocessableEntity)]
+        public async Task<IActionResult> DeletePermanent([FromODataBody, Required] IEnumerable<int> productIds)
+        {
+            try
+            {
+                if (!productIds.Any())
+                {
+                    productIds = await Db.Products
+                        .IgnoreQueryFilters()
+                        .Where(x => x.Deleted)
+                        .Select(x => x.Id)
+                        .ToArrayAsync();
+                }
+
+                var result = await _productService.Value.DeleteProductsPermanentAsync(productIds.ToArray());
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return ErrorResult(ex);
+            }
+        }
+
+        /// <summary>
+        /// Restores soft-deleted products.
+        /// </summary>
+        /// <param name="productIds">Identifiers of products to restore.</param>
+        /// <param name="publishAfterRestore">A value indicating whether to publish restored products.</param>
+        /// <returns>Number of restored products.</returns>
+        [HttpPost("Products/Restore")]
+        [Permission(Permissions.Catalog.Product.Create)]
+        [Consumes(Json), Produces(Json)]
+        [ProducesResponseType(typeof(int), Status200OK)]
+        [ProducesResponseType(Status422UnprocessableEntity)]
+        public async Task<IActionResult> Restore(
+            [FromODataBody, Required] IEnumerable<int> productIds,
+            [FromODataBody] bool? publishAfterRestore = null)
+        {
+            try
+            {
+                var result = await _productService.Value.RestoreProductsAsync(productIds.ToArray(), publishAfterRestore);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return ErrorResult(ex);
+            }
+        }
+
         #endregion
 
         #region Utilities
@@ -878,12 +955,6 @@ namespace Smartstore.Web.Api.Controllers
             {
                 return ErrorResult(ex);
             }
-        }
-
-        private async Task UpdateSlug(Product entity)
-        {
-            var slugResult = await _urlService.Value.ValidateSlugAsync(entity, string.Empty, true);
-            await _urlService.Value.ApplySlugAsync(slugResult, true);
         }
 
         #endregion

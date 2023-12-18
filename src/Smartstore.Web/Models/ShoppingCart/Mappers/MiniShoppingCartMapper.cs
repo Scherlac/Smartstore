@@ -94,7 +94,7 @@ namespace Smartstore.Web.Models.Cart
             to.ShowBasePrice = _shoppingCartSettings.ShowBasePrice;
             to.TotalProducts = from.GetTotalQuantity();
 
-            if (!from.Items.Any())
+            if (!from.HasItems)
             {
                 return;
             }
@@ -130,23 +130,17 @@ namespace Smartstore.Web.Models.Cart
                     ProductName = product.GetLocalized(x => x.Name),
                     ShortDesc = product.GetLocalized(x => x.ShortDescription),
                     ProductSeName = productSeName,
-                    EnteredQuantity = item.Quantity,
-                    MaxOrderAmount = product.OrderMaximumQuantity,
-                    MinOrderAmount = product.OrderMinimumQuantity,
-                    QuantityStep = product.QuantityStep > 0 ? product.QuantityStep : 1,
                     CreatedOnUtc = item.UpdatedOnUtc,
                     ProductUrl = await _productUrlHelper.GetProductUrlAsync(productSeName, cartItem),
-                    QuantityUnitName = null,
                     AttributeInfo = await _productAttributeFormatter.FormatAttributesAsync(
                         item.AttributeSelection,
                         product,
+                        new ProductAttributeFormatOptions { FormatTemplate = "<b>{0}:</b> <span>{1}</span>", ItemSeparator = Environment.NewLine, IncludePrices = false, IncludeHyperlinks = false, IncludeGiftCardAttributes = false },
                         null,
-                        ", ",
-                        includePrices: false,
-                        includeGiftCardAttributes: false,
-                        includeHyperlinks: false,
                         batchContext: batchContext)
                 };
+
+                await cartItem.MapQuantityInputAsync(cartItemModel, mapUnitName: false);
 
                 if (cartItem.ChildItems != null && _shoppingCartSettings.ShowProductBundleImagesOnShoppingCart)
                 {
@@ -191,18 +185,21 @@ namespace Smartstore.Web.Models.Cart
                 }
 
                 // Unit prices.
-                if (product.CallForPrice)
+                if (lineItems.TryGetValue(item.Id, out var lineItem))
                 {
-                    cartItemModel.UnitPrice = new(0, currency, false, T("Products.CallForPrice"));
-                }
-                else if (lineItems.TryGetValue(item.Id, out var lineItem))
-                {
-                    var unitPrice = _currencyService.ConvertFromPrimaryCurrency(lineItem.UnitPrice.FinalPrice.Amount, currency);
-                    cartItemModel.UnitPrice = unitPrice.WithPostFormat(taxFormat);
-
-                    if (unitPrice != 0 && to.ShowBasePrice)
+                    if (lineItem.UnitPrice.PricingType == PricingType.CallForPrice)
                     {
-                        cartItemModel.BasePriceInfo = _priceCalculationService.GetBasePriceInfo(item.Product, unitPrice, currency);
+                        cartItemModel.UnitPrice = lineItem.UnitPrice.FinalPrice;
+                    }
+                    else
+                    {
+                        var unitPrice = _currencyService.ConvertFromPrimaryCurrency(lineItem.UnitPrice.FinalPrice.Amount, currency);
+                        cartItemModel.UnitPrice = unitPrice.WithPostFormat(taxFormat);
+
+                        if (unitPrice != 0 && to.ShowBasePrice)
+                        {
+                            cartItemModel.BasePriceInfo = _priceCalculationService.GetBasePriceInfo(item.Product, unitPrice, currency);
+                        }
                     }
                 }
 

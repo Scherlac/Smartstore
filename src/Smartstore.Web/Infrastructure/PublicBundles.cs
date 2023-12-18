@@ -48,7 +48,6 @@ namespace Smartstore.Web.Infrastructure
             /* Public Common CSS --> /bundle/css/site-common.css
             -----------------------------------------------------*/
             bundles.Add(new StyleBundle("/bundle/css/site-common.css").Include(
-                lib + "fa6/css/all.css", // TODO: (core) Consider "fa-use-pro" theme variable somehow
                 lib + "fontastic/fontastic.css",
                 lib + "pnotify/css/pnotify.css",
                 lib + "pnotify/css/pnotify.mobile.css",
@@ -77,7 +76,7 @@ namespace Smartstore.Web.Infrastructure
                 lib + "pnotify/js/pnotify.animate.js",
                 lib + "slick/slick.js",
                 lib + "aos/js/aos.js",
-                lib + "bs4/js/bootstrap.bundle.js",
+                lib + "bootstrap/js/bootstrap.bundle.js",
                 // Common
                 js + "underscore.mixins.js",
                 js + "smartstore.system.js",

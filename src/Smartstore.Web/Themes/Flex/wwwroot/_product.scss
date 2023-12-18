@@ -76,9 +76,22 @@ $pd-offer-spacing:              $grid-gutter-width / 2;
     }
 }
 
-.zoom-window-container {
-    position: relative;
+.pd-section {
+    .zoom-window-container {
+        &:empty {
+            display: none;
+        }
+
+        display: block;
+        position: sticky;
+        inset-inline: 0;
+        top: 4px;
+        z-index: $zindex-popover;
+        margin: 0 calc(var(--gutter-x) * -.5);
+        box-shadow: var(--box-shadow-md);
+    }
 }
+
 
 // Info
 // =====================================================
@@ -173,14 +186,19 @@ $pd-offer-spacing:              $grid-gutter-width / 2;
 // =====================================================
 
 .pd-offer {
+    --pd-finalprice-color: #{$pd-price-color};
+    --pd-finalprice-offer-color: #{$pd-price-offer-color};
+    --pd-offer-muted-color: #{$pd-offer-muted-color};
+    --pd-finalprice-font-size: 1.8rem;
+    --pd-finalprice-font-size-sm: 1.5rem;
+    --pd-offer-font-size-base: inherit;
+    --pd-offer-font-size-sm: #{$font-size-sm};
+
     background: $pd-offer-bg;
     padding: $pd-offer-spacing;
     line-height: $pd-line-height;
     width: 100%;
     border-radius: var(--border-radius-md);
-    --pd-finalprice-color: #{$pd-price-color};
-    --pd-finalprice-offer-color: #{$pd-price-offer-color};
-    --pd-offer-muted-color: #{$pd-offer-muted-color};
 }
 
 .row.pd-offer-actions {
@@ -194,8 +212,16 @@ $pd-offer-spacing:              $grid-gutter-width / 2;
     }
 
     .pd-offer-action-qty {
-        max-width: 120px;
-        min-width: 90px;
+        flex-shrink: 1;
+
+        > .qty-input {
+            min-width: 90px;
+            max-width: 120px;
+
+            &.qty-input-dropdown {
+                max-width: 140px;
+            }
+        }
     }
 
     .quote-request {
@@ -217,12 +243,12 @@ $pd-offer-spacing:              $grid-gutter-width / 2;
 }
 
 .pd-price {
-    font-size: 1.8rem;
+    font-size: var(--pd-finalprice-font-size, 1.8rem);
     font-weight: 500;
     color: $pd-price-color;
 
     &.pd-price-sm {
-        font-size: 1.5rem;
+        font-size: var(--pd-finalprice-font-size-sm, 1.5rem);
     }
     &.pd-price--offer {
         color: $pd-price-offer-color;
@@ -274,28 +300,30 @@ $pd-offer-spacing:              $grid-gutter-width / 2;
 }
 
 .pd-finalprice-amount {
-    font-size: 1.8rem;
+    font-size: var(--pd-finalprice-font-size, 1.8rem);
     font-weight: $font-weight-medium;
     color: var(--pd-finalprice-color);
     margin-inline-end: 0.75rem;
+    white-space: nowrap;
 
     .pd-finalprice-offer & {
         color: var(--pd-finalprice-offer-color);
     }
 
     &.pd-finalprice-sm {
-        font-size: 1.5rem;
+        font-size: var(--pd-finalprice-font-size-sm, 1.5rem);
     }
 }
 
 .pd-offer-countdown {
-    font-size: $font-size-sm;
+    font-size: var(--pd-offer-font-size-sm, 0.875rem);
     font-weight: $font-weight-normal;
     color: $warning;
+    color: var(--warning-text-emphasis);
 }
 
 .pd-promoprice-group {
-    font-size: $font-size-sm;
+    font-size: var(--pd-offer-font-size-sm, 0.875rem);
 }
 
 .pd-promoprice-line {
@@ -322,9 +350,10 @@ $pd-offer-spacing:              $grid-gutter-width / 2;
 }
 
 .pd-pangv,
-.pd-legalinfo {
+.pd-legalinfo,
+.pd-muted {
     color: var(--pd-offer-muted-color);
-    font-size: $font-size-sm;
+    font-size: var(--pd-offer-font-size-sm, 0.875rem);
 }
 
 

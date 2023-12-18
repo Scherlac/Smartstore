@@ -24,24 +24,30 @@ namespace Smartstore.Core.Checkout.Tax
         private readonly IGeoCountryLookup _geoCountryLookup;
         private readonly IProviderManager _providerManager;
         private readonly IWorkContext _workContext;
+        private readonly IRoundingHelper _roundingHelper;
         private readonly ILocalizationService _localizationService;
         private readonly TaxSettings _taxSettings;
         private readonly SmartDbContext _db;
+        private readonly ViesTaxationHttpClient _client;
 
         public TaxService(
             SmartDbContext db,
             IGeoCountryLookup geoCountryLookup,
             IProviderManager providerManager,
             IWorkContext workContext,
+            IRoundingHelper roundingHelper,
             ILocalizationService localizationService,
-            TaxSettings taxSettings)
+            TaxSettings taxSettings,
+            ViesTaxationHttpClient client)
         {
             _db = db;
             _geoCountryLookup = geoCountryLookup;
             _providerManager = providerManager;
             _workContext = workContext;
+            _roundingHelper = roundingHelper;
             _localizationService = localizationService;
             _taxSettings = taxSettings;
+            _client = client;
         }
 
         #region Hook 
@@ -153,19 +159,13 @@ namespace Smartstore.Core.Checkout.Tax
 
             try
             {
-                var vatService = new EuropeCheckVatService.checkVatPortTypeClient();
+                var response = await _client.CheckVatAsync(vatNumber.Replace(" ", string.Empty), twoLetterIsoCode.ToUpper());
 
-                var response = await vatService.checkVatAsync(new EuropeCheckVatService.checkVatRequest
+                return new(response.IsValid ? VatNumberStatus.Valid : VatNumberStatus.Invalid, fullVatNumber)
                 {
-                    vatNumber = vatNumber.Replace(" ", string.Empty),
-                    countryCode = twoLetterIsoCode.ToUpper()
-                });
-
-                return new(response.valid ? VatNumberStatus.Valid : VatNumberStatus.Invalid, fullVatNumber)
-                {
-                    Name = response.name,
-                    Address = response.address,
-                    CountryCode = response.countryCode,
+                    Name = response.Name,
+                    Address = response.Address,
+                    CountryCode = response.CountryCode,
                 };
             }
             catch (Exception ex)
@@ -320,7 +320,7 @@ namespace Smartstore.Core.Checkout.Tax
             }
 
             // Gross > Net RoundFix
-            price = _workContext.WorkingCurrency.RoundIfEnabledFor(price);
+            price = _roundingHelper.RoundIfEnabledFor(price);
 
             return (price, taxRate);
         }

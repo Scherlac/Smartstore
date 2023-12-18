@@ -1,6 +1,5 @@
 ﻿@using Smartstore.Web.Models.Catalog
-@using Smartstore.Core.Common
-@using Smartstore.Core.Catalog.Pricing
+@using Smartstore.Core.Common.Services
 
 @model ProductDetailsModel
 
@@ -17,7 +16,7 @@
             <span class="pd-promoprice pl-1">@Html.Raw(priceModel.Price)</span>
             <a sm-if="priceModel.Description.HasValue()" href="javascript:;" 
                role="button" 
-               class="pd-promoprice-tip pd-popover-trigger" 
+               class="pd-promoprice-tip popover-trigger" 
                data-toggle="popover"
                data-container="body"
                data-placement="top"
@@ -46,6 +45,7 @@
         var isBundleItemPricing = Model.BundlePerItemPricing;
         var showPriceSaving = priceModel.Saving.SavingAmount.HasValue && (priceModel.ShowRetailPriceSaving || priceModel.RegularPrice != null);
         var showPrice = !(isBundlePart && priceModel.FinalPrice == 0);
+        var roundedPrice = RoundingHelper.Round(priceModel.FinalPrice);
 
         @* Price *@
         <div class="pd-group" sm-suppress-if-empty="true">
@@ -62,7 +62,7 @@
                 @* Final price *@
                 <div sm-if="showPrice" class="pd-finalprice" attr-class='(priceModel.Saving.HasSaving, "pd-finalprice-offer")'>
                     <meta itemprop="priceCurrency" sm-if="!isBundlePart" content="@WorkContext.WorkingCurrency.CurrencyCode" />
-                    <meta itemprop="price" sm-if="!priceModel.CallForPrice && !isBundlePart" content="@priceModel.FinalPrice.RoundedAmount.ToStringInvariant()" />
+                    <meta itemprop="price" sm-if="!priceModel.CallForPrice && !isBundlePart" content="@roundedPrice.ToStringInvariant()" />
                     @if (priceModel.ValidUntilUtc.HasValue)
                     {
                         <meta itemprop="priceValidUntil" content="@priceModel.ValidUntilUtc.Value.ToString("u")" />
@@ -96,7 +96,7 @@
                 </div>
             </div>
 
-            <zone name="@("productdetails_add_info{0}".FormatWith(isBundlePart ? "_bundle" : string.Empty))" />
+            <zone name="@("productdetails_add_info{0}".FormatInvariant(isBundlePart ? "_bundle" : string.Empty))" />
         </div>
 
         <div sm-if="!isBundlePart" class="pd-tierprices">

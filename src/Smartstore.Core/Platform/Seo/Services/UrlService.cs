@@ -8,6 +8,7 @@ using Smartstore.Core.Security;
 using Smartstore.Core.Seo.Routing;
 using Smartstore.Core.Stores;
 using Smartstore.Data.Hooks;
+using Smartstore.Threading;
 
 namespace Smartstore.Core.Seo
 {
@@ -67,7 +68,7 @@ namespace Smartstore.Core.Seo
             ValidateCacheState();
         }
 
-        internal UrlService GetInstanceForForBatching(SmartDbContext db = null)
+        internal UrlService GetInstanceForBatching(SmartDbContext db = null)
         {
             if (db == null || db == _db)
             {
@@ -126,7 +127,7 @@ namespace Smartstore.Core.Seo
         /// <returns></returns>
         protected virtual async Task<Dictionary<int, string>> GetCacheSegmentAsync(string entityName, int entityId, int languageId)
         {
-            Guard.NotEmpty(entityName, nameof(entityName));
+            Guard.NotEmpty(entityName);
 
             var segmentKey = GetSegmentKeyPart(entityName, entityId, out var minEntityId, out var maxEntityId);
             var cacheKey = BuildCacheSegmentKey(segmentKey, languageId);
@@ -250,7 +251,7 @@ namespace Smartstore.Core.Seo
 
         public virtual async Task<string> GetActiveSlugAsync(int entityId, string entityName, int languageId)
         {
-            Guard.NotEmpty(entityName, nameof(entityName));
+            Guard.NotEmpty(entityName);
 
             if (TryGetPrefetchedActiveSlug(entityId, entityName, languageId, out var slug))
             {
@@ -317,7 +318,7 @@ namespace Smartstore.Core.Seo
 
         public virtual async Task<UrlRecordCollection> GetUrlRecordCollectionAsync(string entityName, int[] languageIds, int[] entityIds, bool isRange = false, bool isSorted = false, bool tracked = false)
         {
-            Guard.NotEmpty(entityName, nameof(entityName));
+            Guard.NotEmpty(entityName);
 
             var query = from x in _db.UrlRecords.ApplyTracking(tracked)
                         where x.EntityName == entityName && x.IsActive
@@ -506,10 +507,11 @@ namespace Smartstore.Core.Seo
             string seName,
             string displayName,
             bool ensureNotEmpty,
-            int? languageId = null)
+            int? languageId = null,
+            bool force = false)
             where T : ISlugSupported
         {
-            Guard.NotNull(entity, nameof(entity));
+            Guard.NotNull(entity);
 
             // Use displayName if seName is not specified.
             if (string.IsNullOrWhiteSpace(seName) && !string.IsNullOrWhiteSpace(displayName))
@@ -562,7 +564,7 @@ namespace Smartstore.Core.Seo
             while (true)
             {
                 // Check whether such slug already exists in the database
-                var urlRecord = _extraSlugLookup.Get(tempSlug) ?? (await _db.UrlRecords.FirstOrDefaultAsync(x => x.Slug == tempSlug));
+                var urlRecord = (!force ? _extraSlugLookup.Get(tempSlug) : null) ?? await _db.UrlRecords.FirstOrDefaultAsync(x => x.Slug == tempSlug);
 
                 // Check whether found record refers to requested entity
                 foundIsSelf = FoundRecordIsSelf(entity, urlRecord, languageId);
@@ -620,6 +622,26 @@ namespace Smartstore.Core.Seo
                 .ToDictionaryAsync(x => x.Id, x => x.Count);
 
             return result;
+        }
+
+        public IDistributedLock GetLock<T>(T entity, string seName, string displayName, bool ensureNotEmpty, out string lockKey) where T : ISlugSupported
+        {
+            Guard.NotNull(entity);
+
+            lockKey = seName.NullEmpty() ?? displayName;
+
+            if (ensureNotEmpty && string.IsNullOrEmpty(lockKey))
+            {
+                // Use entity identifier as key if empty
+                lockKey = entity.GetEntityName().ToLower() + entity.Id.ToStringInvariant();
+            }
+
+            if (string.IsNullOrEmpty(lockKey))
+            {
+                return null;
+            }
+
+            return DistributedSemaphoreLockProvider.Instance.GetLock("slug:" + lockKey);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

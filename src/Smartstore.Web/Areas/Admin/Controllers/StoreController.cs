@@ -5,12 +5,12 @@ using Smartstore.Admin.Models.Stores;
 using Smartstore.ComponentModel;
 using Smartstore.Core.Catalog.Search;
 using Smartstore.Core.Checkout.Cart;
-using Smartstore.Core.Common.Services;
 using Smartstore.Core.Content.Media;
 using Smartstore.Core.Identity;
 using Smartstore.Core.Localization;
 using Smartstore.Core.Security;
 using Smartstore.Core.Stores;
+using Smartstore.Utilities;
 using Smartstore.Web.Models;
 using Smartstore.Web.Models.DataGrid;
 
@@ -20,16 +20,11 @@ namespace Smartstore.Admin.Controllers
     {
         private readonly SmartDbContext _db;
         private readonly ICatalogSearchService _catalogSearchService;
-        private readonly Lazy<ICurrencyService> _currencyService;
 
-        public StoreController(
-            SmartDbContext db,
-            ICatalogSearchService catalogSearchService,
-            Lazy<ICurrencyService> currencyService)
+        public StoreController(SmartDbContext db, ICatalogSearchService catalogSearchService)
         {
             _db = db;
             _catalogSearchService = catalogSearchService;
-            _currencyService = currencyService;
         }
 
         /// <summary>
@@ -105,7 +100,7 @@ namespace Smartstore.Admin.Controllers
 
             var model = new StoreModel
             {
-                DefaultCurrencyId = _currencyService.Value.PrimaryCurrency.Id
+                DefaultCurrencyId = Services.CurrencyService.PrimaryCurrency.Id
             };
 
             return View(model);
@@ -209,6 +204,7 @@ namespace Smartstore.Admin.Controllers
         [Permission(Permissions.Configuration.Store.ReadStats, false)]
         public async Task<JsonResult> StoreDashboardReportAsync()
         {
+            var primaryCurrency = Services.CurrencyService.PrimaryCurrency;
             var ordersQuery = _db.Orders.AsNoTracking();
             var registeredRole = await _db.CustomerRoles
                 .AsNoTracking()
@@ -221,6 +217,7 @@ namespace Smartstore.Admin.Controllers
             var sumAllOrders = await ordersQuery.SumAsync(x => (decimal?)x.OrderTotal) ?? 0;
             var sumOpenCarts = await _db.ShoppingCartItems.GetOpenCartTypeSubTotalAsync(ShoppingCartType.ShoppingCart);
             var sumWishlists = await _db.ShoppingCartItems.GetOpenCartTypeSubTotalAsync(ShoppingCartType.Wishlist);
+            var totalMediaSize = await _db.MediaFiles.SumAsync(x => (long)x.Size);
 
             var model = new StoreDashboardReportModel
             {
@@ -230,12 +227,13 @@ namespace Smartstore.Admin.Controllers
                 AttributesCount = (await _db.ProductAttributes.CountAsync()).ToString("N0"),
                 AttributeCombinationsCount = (await _db.ProductVariantAttributeCombinations.CountAsync(x => x.IsActive)).ToString("N0"),
                 MediaCount = (await Services.MediaService.CountFilesAsync(new MediaSearchQuery { Deleted = false })).ToString("N0"),
+                MediaSize = Prettifier.HumanizeBytes(totalMediaSize),
                 CustomersCount = (await registeredCustomersQuery.CountAsync()).ToString("N0"),
                 OrdersCount = (await ordersQuery.CountAsync()).ToString("N0"),
-                Sales = Services.CurrencyService.PrimaryCurrency.AsMoney(sumAllOrders).ToString(),
                 OnlineCustomersCount = (await _db.Customers.ApplyOnlineCustomersFilter(15).CountAsync()).ToString("N0"),
-                CartsValue = Services.CurrencyService.PrimaryCurrency.AsMoney(sumOpenCarts).ToString(),
-                WishlistsValue = Services.CurrencyService.PrimaryCurrency.AsMoney(sumWishlists).ToString()
+                Sales = Services.CurrencyService.CreateMoney(sumAllOrders, primaryCurrency).ToString(),
+                CartsValue = Services.CurrencyService.CreateMoney(sumOpenCarts, primaryCurrency).ToString(),
+                WishlistsValue = Services.CurrencyService.CreateMoney(sumWishlists, primaryCurrency).ToString()
             };
 
             return new JsonResult(new { model });

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
+using Smartstore.Core.Catalog.Attributes;
 using Smartstore.Core.Catalog.Pricing;
 using Smartstore.Core.Catalog.Products;
 using Smartstore.Core.Checkout.Cart;
@@ -33,6 +34,7 @@ namespace Smartstore.StripeElements.Controllers
         private readonly IProductService _productService;
         private readonly IOrderCalculationService _orderCalculationService;
         private readonly ICurrencyService _currencyService;
+        private readonly IRoundingHelper _roundingHelper;
         private readonly IOrderProcessingService _orderProcessingService;
         private readonly StripeHelper _stripeHelper;
         
@@ -46,6 +48,7 @@ namespace Smartstore.StripeElements.Controllers
             IProductService productService,
             IOrderCalculationService orderCalculationService,
             ICurrencyService currencyService,
+            IRoundingHelper roundingHelper,
             IOrderProcessingService orderProcessingService,
             StripeHelper stripeHelper)
         {
@@ -58,8 +61,32 @@ namespace Smartstore.StripeElements.Controllers
             _productService = productService;
             _orderCalculationService = orderCalculationService;
             _currencyService = currencyService;
+            _roundingHelper = roundingHelper;
             _orderProcessingService = orderProcessingService;
             _stripeHelper = stripeHelper;
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> ValidateCart(ProductVariantQuery query, bool? useRewardPoints)
+        {
+            var success = false;
+            var message = string.Empty;
+            var store = Services.StoreContext.CurrentStore;
+            var customer = Services.WorkContext.CurrentCustomer;
+            var warnings = new List<string>();
+            var cart = await _shoppingCartService.GetCartAsync(customer, ShoppingCartType.ShoppingCart, store.Id);
+
+            var isCartValid = await _shoppingCartService.SaveCartDataAsync(cart, warnings, query, useRewardPoints, false);
+            if (isCartValid)
+            {
+                success = true;
+            }
+            else
+            {
+                message = string.Join(Environment.NewLine, warnings);
+            }
+
+            return Json(new { success, message });
         }
 
         [HttpPost]
@@ -180,11 +207,12 @@ namespace Smartstore.StripeElements.Controllers
                     {
                         var state = _checkoutStateAccessor.CheckoutState.GetCustomState<StripeCheckoutState>();
                         var cartTotal = await _orderCalculationService.GetShoppingCartTotalAsync(cart, true);
+                        var convertedTotal = cartTotal.ConvertedAmount.Total.Value;
 
                         // Update Stripe Payment Intent.
                         var intentUpdateOptions = new PaymentIntentUpdateOptions
                         {
-                            Amount = cartTotal.ConvertedAmount.Total.Value.RoundedAmount.ToSmallestCurrencyUnit(),
+                            Amount = _roundingHelper.ToSmallestCurrencyUnit(convertedTotal),
                             Currency = state.PaymentIntent.Currency,
                             PaymentMethod = state.PaymentMethod
                         };

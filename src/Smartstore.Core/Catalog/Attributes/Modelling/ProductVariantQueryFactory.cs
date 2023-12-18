@@ -4,6 +4,7 @@ using Smartstore.Collections;
 using Smartstore.Core.Catalog.Search.Modelling;
 using Smartstore.Core.Checkout.Attributes;
 using Smartstore.Core.Checkout.GiftCards;
+using Smartstore.Utilities;
 
 namespace Smartstore.Core.Catalog.Attributes.Modelling
 {
@@ -76,7 +77,7 @@ namespace Smartstore.Core.Catalog.Attributes.Modelling
 
             foreach (var item in QueryItems)
             {
-                if (!item.Value.Any() || item.Key.EndsWith("-day") || item.Key.EndsWith("-month"))
+                if (!item.Value.Any())
                 {
                     continue;
                 }
@@ -121,39 +122,15 @@ namespace Smartstore.Core.Catalog.Attributes.Modelling
             if (key.EndsWith("-date"))
             {
                 // Convert from one query string item.
-                var dateItems = value.SplitSafe('-');
+                var dateItems = value.SplitSafe('-').ToArray();
                 year = dateItems.ElementAtOrDefault(0).ToInt();
                 month = dateItems.ElementAtOrDefault(1).ToInt();
                 day = dateItems.ElementAtOrDefault(2).ToInt();
             }
-            else if (key.EndsWith("-year"))
-            {
-                // Convert from three form controls.
-                var dateKey = key.Replace("-year", string.Empty);
-                year = value.ToInt();
-
-                if (QueryItems.ContainsKey(dateKey + "-month"))
-                {
-                    var str = QueryItems[dateKey + "-month"].FirstOrDefault();
-                    month = str?.ToInt() ?? 0;
-                }
-
-                if (QueryItems.ContainsKey(dateKey + "-day"))
-                {
-                    var str = QueryItems[dateKey + "-day"].FirstOrDefault();
-                    day = str?.ToInt() ?? 0;
-                }
-            }
 
             if (year > 0 && month > 0 && day > 0)
             {
-                try
-                {
-                    return new DateTime(year, month, day);
-                }
-                catch
-                {
-                }
+                return CommonHelper.TryAction(() => new DateTime(year, month, day));
             }
 
             return null;
@@ -167,7 +144,7 @@ namespace Smartstore.Core.Catalog.Attributes.Modelling
                 return;
             }
 
-            var isDate = key.EndsWith("-date") || key.EndsWith("-year");
+            var isDate = key.EndsWith("-date");
             var isFile = key.EndsWith("-file");
             var isText = key.EndsWith("-text");
 
@@ -217,7 +194,7 @@ namespace Smartstore.Core.Catalog.Attributes.Modelling
                 return;
             }
 
-            var isDate = key.EndsWith("-date") || key.EndsWith("-year");
+            var isDate = key.EndsWith("-date");
             var isFile = key.EndsWith("-file");
             var isText = key.EndsWith("-text");
 
@@ -319,7 +296,7 @@ namespace Smartstore.Core.Catalog.Attributes.Modelling
             }
 
             var attributeId = ids[0].ToInt();
-            var isDate = key.EndsWith("-date") || key.EndsWith("-year");
+            var isDate = key.EndsWith("-date");
             var isFile = key.EndsWith("-file");
             var isText = key.EndsWith("-text");
 

@@ -20,8 +20,8 @@ namespace Smartstore.Core.Checkout.Cart
     public partial class ShoppingCartService : IShoppingCartService
     {
         // 0 = CustomerId, 1 = CartType, 2 = StoreId
-        private const string CartItemsKey = "shoppingcartitems:{0}-{1}-{2}";
-        private const string CartItemsPatternKey = "shoppingcartitems:*";
+        const string CartItemsKey = "shoppingcartitems:{0}-{1}-{2}";
+        const string CartItemsPatternKey = "shoppingcartitems:*";
 
         private readonly SmartDbContext _db;
         private readonly IWorkContext _workContext;
@@ -29,6 +29,7 @@ namespace Smartstore.Core.Checkout.Cart
         private readonly IRequestCache _requestCache;
         private readonly IEventPublisher _eventPublisher;
         private readonly IShoppingCartValidator _cartValidator;
+        private readonly IRoundingHelper _roundingHelper;
         private readonly IProductAttributeMaterializer _productAttributeMaterializer;
         private readonly ICheckoutAttributeMaterializer _checkoutAttributeMaterializer;
         private readonly ShoppingCartSettings _shoppingCartSettings;
@@ -42,6 +43,7 @@ namespace Smartstore.Core.Checkout.Cart
             IRequestCache requestCache,
             IEventPublisher eventPublisher,
             IShoppingCartValidator cartValidator,
+            IRoundingHelper roundingHelper,
             IProductAttributeMaterializer productAttributeMaterializer,
             ICheckoutAttributeMaterializer checkoutAttributeMaterializer,
             ICurrencyService currencyService,
@@ -54,6 +56,7 @@ namespace Smartstore.Core.Checkout.Cart
             _requestCache = requestCache;
             _eventPublisher = eventPublisher;
             _cartValidator = cartValidator;
+            _roundingHelper = roundingHelper;
             _productAttributeMaterializer = productAttributeMaterializer;
             _checkoutAttributeMaterializer = checkoutAttributeMaterializer;
             _rewardPointsSettings = rewardPointsSettings;
@@ -185,7 +188,7 @@ namespace Smartstore.Core.Checkout.Cart
             }
 
             var existingCartItem = ctx.BundleItem == null
-                ? cart.FindItemInCart(ctx.CartType, ctx.Product, ctx.AttributeSelection, ctx.CustomerEnteredPrice)?.Item
+                ? FindItemInCart(cart, ctx.CartType, ctx.Product, ctx.AttributeSelection, ctx.CustomerEnteredPrice)?.Item
                 : null;
 
             // Add item to cart (if no warnings accured)
@@ -566,6 +569,67 @@ namespace Smartstore.Core.Checkout.Cart
             return await _cartValidator.ValidateCartAsync(cart, warnings, validateCheckoutAttributes);
         }
 
+        public virtual OrganizedShoppingCartItem FindItemInCart(
+            ShoppingCart cart,
+            ShoppingCartType shoppingCartType,
+            Product product,
+            ProductVariantAttributeSelection selection = null,
+            Money? customerEnteredPrice = null)
+        {
+            Guard.NotNull(cart);
+            Guard.NotNull(product);
+
+            // Return on product bundle with individual item pricing. It is too complex to compare.
+            if (product.ProductType == ProductType.BundledProduct && product.BundlePerItemPricing)
+            {
+                return null;
+            }
+
+            // Filter items of matching cart type, product ID and product type.
+            var filteredCart = cart.Items.Where(x => x.Item.ShoppingCartType == shoppingCartType &&
+                x.Item.ParentItemId == null &&
+                x.Item.Product.ProductTypeId == product.ProductTypeId &&
+                x.Item.ProductId == product.Id);
+
+            foreach (var cartItem in filteredCart)
+            {
+                var item = cartItem.Item;
+                var giftCardInfoSame = true;
+                var customerEnteredPricesEqual = true;
+                var attributesEqual = item.AttributeSelection == selection;
+
+                if (item.Product.IsGiftCard)
+                {
+                    var info1 = item.AttributeSelection?.GetGiftCardInfo();
+                    var info2 = selection?.GetGiftCardInfo();
+
+                    if (info1 != null && info2 != null)
+                    {
+                        // INFO: in this context, we only compare the name of recipient and sender.
+                        if (!info1.RecipientName.EqualsNoCase(info2.RecipientName) || !info1.SenderName.EqualsNoCase(info2.SenderName))
+                        {
+                            giftCardInfoSame = false;
+                        }
+                    }
+                }
+
+                // Products with CustomerEntersPrice are equal if the price is the same.
+                // But a system product may only be placed once in the shopping cart.
+                if (customerEnteredPrice.HasValue && item.Product.CustomerEntersPrice && !item.Product.IsSystemProduct)
+                {
+                    var currency = customerEnteredPrice?.Currency ?? _workContext.WorkingCurrency;
+                    customerEnteredPricesEqual = _roundingHelper.Round(item.CustomerEnteredPrice, currency) == _roundingHelper.Round(customerEnteredPrice.Value.Amount, currency);
+                }
+
+                if (attributesEqual && giftCardInfoSame && customerEnteredPricesEqual)
+                {
+                    return cartItem;
+                }
+            }
+
+            return null;
+        }
+
         protected virtual async Task<List<OrganizedShoppingCartItem>> OrganizeCartItemsAsync(ICollection<ShoppingCartItem> items)
         {
             var result = new List<OrganizedShoppingCartItem>();
@@ -606,33 +670,40 @@ namespace Smartstore.Core.Checkout.Cart
         }
 
         /// <summary>
-        /// Removes checkout attributes that require shipping, if the cart does not require shipping at all.
+        /// Removes invalid checkout attributes. For example if the attribute requires shipping but the cart does not require shipping at all.
         /// </summary>
         protected virtual async Task<int> RemoveInvalidCheckoutAttributesAsync(Customer customer, int storeId)
         {
+            var attributeSelection = customer.GenericAttributes.CheckoutAttributes;
+            if (!attributeSelection.HasAttributes)
+            {
+                return 0;
+            }
+
+            var idsToRemove = new HashSet<int>();
+            var attributes = await _checkoutAttributeMaterializer.MaterializeCheckoutAttributesAsync(attributeSelection);
+
             var cart = await GetCartAsync(customer, ShoppingCartType.ShoppingCart, storeId);
             if (!cart.IsShippingRequired())
             {
-                var attributeSelection = customer.GenericAttributes.CheckoutAttributes;
-                var attributes = await _checkoutAttributeMaterializer.MaterializeCheckoutAttributesAsync(attributeSelection);
-
-                var attributeIdsToRemove = attributes
+                idsToRemove.AddRange(attributes
                     .Where(x => x.ShippableProductRequired)
-                    .Select(x => x.Id)
-                    .Distinct()
-                    .ToArray();
-
-                if (attributeIdsToRemove.Any())
-                {
-                    attributeSelection.RemoveAttributes(attributeIdsToRemove);
-
-                    customer.GenericAttributes.CheckoutAttributes = attributeSelection;
-
-                    return await _db.SaveChangesAsync();
-                }
+                    .Select(x => x.Id));
             }
 
-            return 0;
+            idsToRemove.AddRange(attributes
+                .Where(x => !x.IsActive)
+                .Select(x => x.Id));
+
+            if (idsToRemove.Count > 0)
+            {
+                attributeSelection.RemoveAttributes(idsToRemove);
+                customer.GenericAttributes.CheckoutAttributes = attributeSelection;
+
+                await _db.SaveChangesAsync();
+            }
+
+            return idsToRemove.Count;
         }
 
         private async Task LoadCartItemCollection(Customer customer, bool force = false)

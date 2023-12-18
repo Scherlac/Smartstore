@@ -154,10 +154,7 @@ namespace Smartstore.Web.Controllers
         {
             Guard.NotNull(products);
 
-            if (settings == null)
-            {
-                settings = new ProductSummaryMappingSettings();
-            }
+            settings ??= new ProductSummaryMappingSettings();
 
             using (_services.Chronometer.Step("MapProductSummaryModel"))
             {
@@ -210,10 +207,10 @@ namespace Smartstore.Web.Controllers
                 
                 string taxInfo = T(calculationOptions.TaxInclusive ? "Tax.InclVAT" : "Tax.ExclVAT");
                 var legalInfo = string.Empty;
-                
+                var taxExemptLegalInfo = string.Empty;
+
                 var res = new Dictionary<string, LocalizedString>(StringComparer.OrdinalIgnoreCase)
                 {
-                    { "Products.CallForPrice", T("Products.CallForPrice") },
                     { "Products.PriceRangeFrom", T("Products.PriceRangeFrom") },
                     { "Media.Product.ImageLinkTitleFormat", T("Media.Product.ImageLinkTitleFormat") },
                     { "Media.Product.ImageAlternateTextFormat", T("Media.Product.ImageAlternateTextFormat") },
@@ -224,9 +221,15 @@ namespace Smartstore.Web.Controllers
                 if (settings.MapLegalInfo)
                 {
                     var shippingInfoUrl = await _urlHelper.TopicAsync("ShippingInfo");
-                    legalInfo = shippingInfoUrl.HasValue()
-                        ? T("Tax.LegalInfoShort", taxInfo, shippingInfoUrl)
-                        : T("Tax.LegalInfoShort2", taxInfo);
+                    if (shippingInfoUrl.HasValue())
+                    {
+                        legalInfo = T("Tax.LegalInfoShort", taxInfo, shippingInfoUrl);
+                        taxExemptLegalInfo = T("Tax.LegalInfoProductDetail", string.Empty, string.Empty, string.Empty, shippingInfoUrl);
+                    }
+                    else
+                    {
+                        legalInfo = T("Tax.LegalInfoShort2", taxInfo);
+                    }
                 }
 
                 if (prefetchSlugs)
@@ -322,6 +325,7 @@ namespace Smartstore.Web.Controllers
                     CachedBrandModels = cachedBrandModels,
                     PrimaryCurrency = _currencyService.PrimaryCurrency,
                     LegalInfo = legalInfo,
+                    TaxExemptLegalInfo = taxExemptLegalInfo,
                     Model = model,
                     Resources = res,
                     MappingSettings = settings,
@@ -571,7 +575,7 @@ namespace Smartstore.Web.Controllers
                 }
             }
 
-            item.LegalInfo = ctx.LegalInfo;
+            item.LegalInfo = product.IsTaxExempt ? ctx.TaxExemptLegalInfo : ctx.LegalInfo;
             item.RatingSum = product.ApprovedRatingSum;
             item.TotalReviews = product.ApprovedTotalReviews;
             item.IsShippingEnabled = contextProduct.IsShippingEnabled;
@@ -604,7 +608,7 @@ namespace Smartstore.Web.Controllers
 
         private IEnumerable<ProductSpecificationModel> MapProductSpecificationModels(IEnumerable<ProductSpecificationAttribute> attributes)
         {
-            Guard.NotNull(attributes, nameof(attributes));
+            Guard.NotNull(attributes);
 
             if (!attributes.Any())
                 return Enumerable.Empty<ProductSpecificationModel>();

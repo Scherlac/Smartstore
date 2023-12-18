@@ -289,7 +289,6 @@ namespace Smartstore.Admin.Controllers
                 .FirstOrDefaultAsync() ?? new OrderAverageReportLine();
 
             var productCost = await orderQuery.GetOrdersProductCostsAsync();
-
             var profit = summary.SumOrderTotal - summary.SumTax - productCost;
 
             return Json(new GridModel<OrderOverviewModel>
@@ -298,9 +297,9 @@ namespace Smartstore.Admin.Controllers
                 Total = orders.TotalCount,
                 Aggregates = new
                 {
-                    profit = _primaryCurrency.AsMoney(profit).ToString(true),
-                    tax = _primaryCurrency.AsMoney(summary.SumTax).ToString(true),
-                    total = _primaryCurrency.AsMoney(summary.SumOrderTotal).ToString(true)
+                    profit = Services.CurrencyService.CreateMoney(profit, _primaryCurrency).ToString(true),
+                    tax = Services.CurrencyService.CreateMoney(summary.SumTax, _primaryCurrency).ToString(true),
+                    total = Services.CurrencyService.CreateMoney(summary.SumOrderTotal, _primaryCurrency).ToString(true)
                 }
             });
         }
@@ -436,7 +435,36 @@ namespace Smartstore.Admin.Controllers
                                 }
                                 else
                                 {
-                                    ++numSkipped;
+                                    if (ship)
+                                    {
+                                        var quantities = new Dictionary<int, int>();
+                                        foreach (var orderItem in o.OrderItems)
+                                        {
+                                            quantities.Add(orderItem.Id, orderItem.Quantity);
+                                        }
+
+                                        var shipment = await _orderProcessingService.AddShipmentAsync(o, string.Empty, string.Empty, quantities);
+                                        if (shipment != null)
+                                        {
+                                            Services.ActivityLogger.LogActivity(KnownActivityLogTypes.EditOrder, T("ActivityLog.EditOrder"), o.GetOrderNumber());
+                                        
+                                            if (ship && shipment.ShippedDateUtc == null)
+                                            {
+                                                await _orderProcessingService.ShipAsync(shipment, true);
+                                            }
+                                    
+                                            ++numSuccess;
+                                            succeededOrderNumbers.Add(o.GetOrderNumber());
+                                        }
+                                        else
+                                        {
+                                            ++numSkipped;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        ++numSkipped;
+                                    }
                                 }
                             }
                             else
@@ -1547,7 +1575,7 @@ namespace Smartstore.Admin.Controllers
 
             await _productAttributeMaterializer.MergeWithCombinationAsync(product, selection);
 
-            var attributeDescription = await _productAttributeFormatter.Value.FormatAttributesAsync(selection, product, order.Customer);
+            var attributeDescription = await _productAttributeFormatter.Value.FormatAttributesAsync(selection, product, ProductAttributeFormatOptions.Default, order.Customer);
             var productCost = await _priceCalculationService.Value.CalculateProductCostAsync(product, selection);
 
             var displayDeliveryTime =
@@ -1794,7 +1822,7 @@ namespace Smartstore.Admin.Controllers
                     .Include(x => x.Address)
                     .FindByIdAsync(order.AffiliateId);
 
-                model.AffiliateFullName = affiliate?.Address?.GetFullName() ?? StringExtensions.NotAvailable;
+                model.AffiliateFullName = affiliate?.Address?.GetFullName()?.NullEmpty() ?? StringExtensions.NotAvailable;
             }
 
             model.OrderSubtotalInclTaxString = Format(order.OrderSubtotalInclTax, true);

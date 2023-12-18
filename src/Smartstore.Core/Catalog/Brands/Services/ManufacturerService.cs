@@ -1,5 +1,4 @@
 ﻿using System.Runtime.CompilerServices;
-
 using Smartstore.Core.Data;
 using Smartstore.Core.Seo;
 using Smartstore.Core.Stores;
@@ -24,9 +23,9 @@ namespace Smartstore.Core.Catalog.Brands
 
         public virtual async Task<IList<ProductManufacturer>> GetProductManufacturersByProductIdsAsync(int[] productIds, bool includeHidden = false)
         {
-            Guard.NotNull(productIds, nameof(productIds));
+            Guard.NotNull(productIds);
 
-            if (!productIds.Any())
+            if (productIds.Length == 0)
             {
                 return new List<ProductManufacturer>();
             }
@@ -38,11 +37,10 @@ namespace Smartstore.Core.Catalog.Brands
                 .AsNoTracking()
                 .ApplyStandardFilter(includeHidden, customerRoleIds, storeId);
 
+            // INFO: Never use .ThenInclude(x => x.MediaFile) here! It will make things painfully slow (or even unusable) under certain circumstances.
             var productManufacturerQuery = _db.ProductManufacturers
                 .AsNoTracking()
-                .AsSplitQuery()
-                .Include(x => x.Manufacturer).ThenInclude(x => x.MediaFile)
-                .Include(x => x.Manufacturer).ThenInclude(x => x.AppliedDiscounts);
+                .Include(x => x.Manufacturer);
 
             var query =
                 from pm in productManufacturerQuery

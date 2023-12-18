@@ -1,8 +1,14 @@
-﻿using System.Linq;
+﻿using System;
+using System.Linq;
+using System.Net.Http;
 using System.Threading.Tasks;
+using Moq;
 using NUnit.Framework;
 using Smartstore.Core.Catalog.Products;
 using Smartstore.Core.Checkout.Tax;
+using Smartstore.Core.Common;
+using Smartstore.Core.Common.Configuration;
+using Smartstore.Core.Common.Services;
 using Smartstore.Core.Identity;
 using Smartstore.Test.Common;
 
@@ -11,18 +17,34 @@ namespace Smartstore.Core.Tests.Tax
     [TestFixture]
     public class TaxServiceTests : ServiceTestBase
     {
+        IWorkContext _workContext;
+        IRoundingHelper _roundingHelper;
         ITaxService _taxService;
+        Currency _currency;
+        ViesTaxationHttpClient _client;
 
         [OneTimeSetUp]
         public new void SetUp()
         {
+            _currency = new Currency { Id = 1 };
+
+            var workContextMock = new Mock<IWorkContext>();
+            _workContext = workContextMock.Object;
+            workContextMock.Setup(x => x.WorkingCurrency).Returns(_currency);
+
+            _roundingHelper = new RoundingHelper(_workContext, new CurrencySettings());
+
+            _client = new ViesTaxationHttpClient(new HttpClient());
+
             _taxService = new TaxService(
                 DbContext,
                 null,
                 ProviderManager,
                 null,
+                _roundingHelper,
                 null,
-                new TaxSettings { DefaultTaxAddressId = 10, EuVatUseWebService = true });
+                new TaxSettings { DefaultTaxAddressId = 10, EuVatUseWebService = true },
+                _client);
         }
 
         [Test]
@@ -109,18 +131,19 @@ namespace Smartstore.Core.Tests.Tax
         {
             var result = await _taxService.GetVatNumberStatusAsync(vatNumber);
 
+            if (result.Exception != null)
+            {
+                Assert.Warn($"{nameof(ITaxService.GetVatNumberStatusAsync)} threw an exception. Is the VAT check service perhaps temporarily out of service? {result.Exception.Message}");
+                return;
+            }
+
             if (status == VatNumberStatus.Invalid)
             {
-                result.Exception.ShouldBeNull();
                 result.Status.ShouldEqual(status);
             }
             else if (result.Exception == null)
             {
                 result.Status.ShouldEqual(status);
-            }
-            else
-            {
-                Assert.Warn($"{nameof(ITaxService.GetVatNumberStatusAsync)} threw an exception. Is the VAT check service perhaps temporarily out of service? {result.Exception.Message}");
             }
         }
     }

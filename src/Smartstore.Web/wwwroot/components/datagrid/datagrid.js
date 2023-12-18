@@ -294,7 +294,7 @@ Vue.component("sm-datagrid", {
 
                         this.indicator.style.display = "block";
                         this.indicator.style.left = (atStart ? rect.left : rect.right) + "px";
-                        this.indicator.style.top = rect.top + "px";
+                        this.indicator.style.top = (rect.top + window.scrollY) + "px";
                         this.indicator.style.height = rect.height + "px";
                     }
                 },
@@ -435,7 +435,7 @@ Vue.component("sm-datagrid", {
             let search = $(this.$el).find(".dg-search-body");
 
             // Restore search filter state
-            if (this.options.preserveState) {
+            if (this.options.preserveSearchState) {
                 this._restoreSearchFilterState(search);
             }
 
@@ -1461,7 +1461,7 @@ Vue.component("sm-datagrid", {
                 $.extend(true, command, state);
 
                 // Remember filter state for next request
-                if (this.options.preserveState) {
+                if (this.options.preserveSearchState) {
                     this._rememberSearchFilterState(state);
                 }
             }

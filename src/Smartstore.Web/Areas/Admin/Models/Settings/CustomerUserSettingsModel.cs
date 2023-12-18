@@ -79,6 +79,12 @@ namespace Smartstore.Admin.Models
             [LocalizedDisplay("*StoreLastVisitedPage")]
             public bool StoreLastVisitedPage { get; set; }
 
+            [LocalizedDisplay("*StoreLastUserAgent")]
+            public bool StoreLastUserAgent { get; set; }
+
+            [LocalizedDisplay("*StoreLastDeviceFamily")]
+            public bool StoreLastDeviceFamily { get; set; }
+
             [LocalizedDisplay("*GenderEnabled")]
             public bool GenderEnabled { get; set; }
 
@@ -244,6 +250,9 @@ namespace Smartstore.Admin.Models
             [LocalizedDisplay("*Privacy.SameSiteMode")]
             public SameSiteMode SameSiteMode { get; set; } = SameSiteMode.Lax;
 
+            [LocalizedDisplay("*Privacy.VisitorCookieExpirationDays")]
+            public int VisitorCookieExpirationDays { get; set; } = 365;
+
             [LocalizedDisplay("*Privacy.StoreLastIpAddress")]
             public bool StoreLastIpAddress { get; set; }
 
@@ -324,6 +333,9 @@ namespace Smartstore.Admin.Models
         public CustomerUserSettingsValidator()
         {
             RuleFor(x => x.CustomerSettings.PasswordMinLength).GreaterThanOrEqualTo(4);
+            RuleFor(x => x.CustomerSettings.PasswordRequiredUniqueChars).GreaterThanOrEqualTo(0);
+
+            RuleFor(x => x.PrivacySettings.VisitorCookieExpirationDays).GreaterThan(0);
         }
     }
 }

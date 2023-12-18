@@ -17,7 +17,6 @@
             var opts = this.options;
 
             this.createGallery(opts.galleryStartIndex);
-            this.initPopovers();
 
             $(el).on('click', '.stock-subscriber', function (e) {
                 e.preventDefault();
@@ -33,7 +32,7 @@
             });
 
             // Update product data and gallery
-            $(el).on('change', ':input:not(.skip-update)', function (e) {
+            $(el).on('change', ':input:not(.skip-pd-ajax-update)', function (e) {
                 var inputCtrl = $(this);
                 var ctx = inputCtrl.closest('.update-container');
                 var isNumberInput = inputCtrl.parent(".numberinput-group").length > 0;
@@ -104,7 +103,6 @@
             });
 
             applyCommonPlugins(ctx);
-            self.initPopovers();
 
             ctx.find(".pd-tierprices").html(data.Partials["TierPrices"]);
 
@@ -124,10 +122,6 @@
     ProductDetail.prototype = {
         gallery: null,
         activePictureIndex: 0,
-
-        initPopovers: function () {
-            $('.pd-popover-trigger').popover();
-        },
 
         createGallery: function (startIndex) {
             var self = this;

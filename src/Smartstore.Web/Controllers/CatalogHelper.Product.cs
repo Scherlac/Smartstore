@@ -16,6 +16,7 @@ using Smartstore.Core.Stores;
 using Smartstore.Diagnostics;
 using Smartstore.Web.Infrastructure.Hooks;
 using Smartstore.Web.Models.Catalog;
+using Smartstore.Web.Models.Catalog.Mappers;
 using Smartstore.Web.Models.Media;
 
 namespace Smartstore.Web.Controllers
@@ -217,23 +218,6 @@ namespace Smartstore.Web.Controllers
 
                 #endregion
 
-                #region Share code
-
-                // Social share code.
-                if (_catalogSettings.ShowShareButton && _catalogSettings.PageShareCode.HasValue())
-                {
-                    var shareCode = _catalogSettings.PageShareCode;
-                    if (_services.WebHelper.IsCurrentConnectionSecured())
-                    {
-                        // Need to change the addthis link to be https linked when the page is, so that the page doesn't ask about mixed mode when viewed in https...
-                        shareCode = shareCode.Replace("http://", "https://");
-                    }
-
-                    model.ProductShareCode = shareCode;
-                }
-
-                #endregion
-
                 #region Giftcard
 
                 // Get gift card values from query string.
@@ -392,7 +376,8 @@ namespace Smartstore.Web.Controllers
             await PrepareProductPropertiesModelAsync(model, modelContext);
 
             // AddToCart
-            PrepareProductCartModel(model, modelContext, selectedQuantity);
+            // INFO: must be executed after PrepareProductPriceModelAsync.
+            await PrepareProductCartModelAsync(model, modelContext, selectedQuantity);
 
             // GiftCards
             PrepareProductGiftCardsModel(model, modelContext);
@@ -503,9 +488,7 @@ namespace Smartstore.Web.Controllers
                             case AttributeControlType.Datepicker:
                                 if (selectedAttribute.Date.HasValue)
                                 {
-                                    attributeModel.SelectedDay = selectedAttribute.Date.Value.Day;
-                                    attributeModel.SelectedMonth = selectedAttribute.Date.Value.Month;
-                                    attributeModel.SelectedYear = selectedAttribute.Date.Value.Year;
+                                    attributeModel.SelectedDate = selectedAttribute.Date;
                                 }
                                 break;
                             case AttributeControlType.FileUpload:
@@ -526,14 +509,6 @@ namespace Smartstore.Web.Controllers
                                 break;
                         }
                     }
-                }
-
-                // TODO: obsolete? Alias field is not used for custom values anymore, only for URL as URL variant alias.
-                if (attribute.AttributeControlType == AttributeControlType.Datepicker && attributeModel.Alias.HasValue() && RegularExpressions.IsYearRange.IsMatch(attributeModel.Alias))
-                {
-                    var match = RegularExpressions.IsYearRange.Match(attributeModel.Alias);
-                    attributeModel.BeginYear = match.Groups[1].Value.ToInt();
-                    attributeModel.EndYear = match.Groups[2].Value.ToInt();
                 }
 
                 foreach (var value in attributeValues)
@@ -712,11 +687,8 @@ namespace Smartstore.Web.Controllers
                 model.AttributeInfo = await _productAttributeFormatter.FormatAttributesAsync(
                     modelContext.SelectedAttributes,
                     product,
-                    modelContext.Customer,
-                    separator: ", ",
-                    includePrices: false,
-                    includeGiftCardAttributes: false,
-                    includeHyperlinks: false);
+                    ProductAttributeFormatOptions.PlainText,
+                    modelContext.Customer);
             }
 
             model.SelectedCombination = await _productAttributeMaterializer.FindAttributeCombinationAsync(product.Id, modelContext.SelectedAttributes);
@@ -869,11 +841,11 @@ namespace Smartstore.Web.Controllers
                 additionalShippingCosts = shippingSurcharge.Value.ToString(true) + ", ";
             }
 
-            if (!product.IsShippingEnabled || (shippingSurcharge.GetValueOrDefault() == 0 && product.IsFreeShipping))
+            if (!product.IsShippingEnabled || product.IsFreeShipping)
             {
                 model.LegalInfo += product.IsTaxExempt
                     ? T("Common.FreeShipping")
-                    : "{0} {1}, {2}".FormatInvariant(taxInfo, defaultTaxRate, T("Common.FreeShipping"));
+                    : "{0} {1}{2}".FormatInvariant(taxInfo, defaultTaxRate, T("Common.FreeShipping"));
             }
             else
             {
@@ -940,7 +912,7 @@ namespace Smartstore.Web.Controllers
             model.DeliveryTimesPresentation = deliveryPresentation;
             model.DisplayDeliveryTimeAccordingToStock = product.DisplayDeliveryTimeAccordingToStock(_catalogSettings);
 
-            if (model.DeliveryTimeName.IsEmpty() && deliveryPresentation != DeliveryTimesPresentation.None)
+            if (!model.IsAvailable && model.DeliveryTimeName.IsEmpty() && deliveryPresentation != DeliveryTimesPresentation.None)
             {
                 model.DeliveryTimeName = T("ShoppingCart.NotAvailable");
             }
@@ -949,6 +921,7 @@ namespace Smartstore.Web.Controllers
             if (quantityUnit != null)
             {
                 model.QuantityUnitName = quantityUnit.GetLocalized(x => x.Name);
+                model.QuantityUnitNamePlural = quantityUnit.GetLocalized(x => x.NamePlural);
             }
 
             // Back in stock subscriptions.
@@ -963,7 +936,7 @@ namespace Smartstore.Web.Controllers
             }
         }
 
-        protected void PrepareProductCartModel(ProductDetailsModel model, ProductDetailsModelContext modelContext, int selectedQuantity)
+        protected async Task PrepareProductCartModelAsync(ProductDetailsModel model, ProductDetailsModelContext modelContext, int selectedQuantity)
         {
             using var chronometer = _services.Chronometer.Step("PrepareProductCartModel");
 
@@ -972,14 +945,12 @@ namespace Smartstore.Web.Controllers
             var displayPrices = modelContext.DisplayPrices;
 
             model.AddToCart.ProductId = product.Id;
-            model.AddToCart.EnteredQuantity = product.OrderMinimumQuantity > selectedQuantity ? product.OrderMinimumQuantity : selectedQuantity;
-            model.AddToCart.MinOrderAmount = product.OrderMinimumQuantity;
-            model.AddToCart.MaxOrderAmount = product.OrderMaximumQuantity;
-            model.AddToCart.QuantityUnitName = model.QuantityUnitName; // TODO: (mc) remove 'QuantityUnitName' from parent model later
-            model.AddToCart.QuantityStep = product.QuantityStep > 0 ? product.QuantityStep : 1;
             model.AddToCart.HideQuantityControl = product.HideQuantityControl;
-            model.AddToCart.QuantityControlType = product.QuantityControlType;
             model.AddToCart.AvailableForPreOrder = product.AvailableForPreOrder;
+
+            await product.MapQuantityInputAsync(model.AddToCart, selectedQuantity);
+            model.AddToCart.QuantityUnitName = model.QuantityUnitName; // TODO: (mc) remove 'QuantityUnitName' from parent model later
+            model.AddToCart.QuantityUnitNamePlural = model.QuantityUnitNamePlural; // TODO: (mc) remove 'QuantityUnitName' from parent model later
 
             // 'add to cart', 'add to wishlist' buttons.
             model.AddToCart.DisableBuyButton = !displayPrices || product.DisableBuyButton ||
@@ -989,7 +960,7 @@ namespace Smartstore.Web.Controllers
                 || product.ProductType == ProductType.GroupedProduct
                 || !_services.Permissions.Authorize(Permissions.Cart.AccessWishlist);
 
-            model.AddToCart.CustomerEntersPrice = product.CustomerEntersPrice;
+            model.AddToCart.CustomerEntersPrice = model.Price.CustomerEntersPrice;
             if (model.AddToCart.CustomerEntersPrice)
             {
                 var minimumCustomerEnteredPrice = _currencyService.ConvertFromPrimaryCurrency(product.MinimumCustomerEnteredPrice, currency);
@@ -999,16 +970,6 @@ namespace Smartstore.Web.Controllers
                 model.AddToCart.CustomerEnteredPriceRange = T("Products.EnterProductPrice.Range",
                     _currencyService.ConvertToWorkingCurrency(minimumCustomerEnteredPrice),
                     _currencyService.ConvertToWorkingCurrency(maximumCustomerEnteredPrice));
-            }
-
-            var allowedQuantities = product.ParseAllowedQuantities();
-            foreach (var qty in allowedQuantities)
-            {
-                model.AddToCart.AllowedQuantities.Add(new SelectListItem
-                {
-                    Text = qty.ToString(),
-                    Value = qty.ToString()
-                });
             }
         }
 
@@ -1217,7 +1178,7 @@ namespace Smartstore.Web.Controllers
 
         protected async Task<List<ProductSpecificationModel>> PrepareProductSpecificationModelAsync(ProductDetailsModelContext modelContext)
         {
-            Guard.NotNull(modelContext, nameof(modelContext));
+            Guard.NotNull(modelContext);
 
             var product = modelContext.Product;
             var batchContext = modelContext.BatchContext;

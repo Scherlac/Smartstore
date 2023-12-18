@@ -1,10 +1,13 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using FluentValidation;
+using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
+using Smartstore.Core.Checkout.Shipping;
 using Smartstore.Web.Models.Common;
 
 namespace Smartstore.Admin.Models
 {
     [LocalizedDisplay("Admin.Configuration.Settings.Shipping.")]
-    public class ShippingSettingsModel
+    public partial class ShippingSettingsModel : ModelBase
     {
         public string PrimaryStoreCurrencyCode { get; set; }
 
@@ -23,6 +26,7 @@ namespace Smartstore.Admin.Models
         [LocalizedDisplay("*DisplayShipmentEventsToCustomers")]
         public bool DisplayShipmentEventsToCustomers { get; set; }
 
+        [ValidateNever]
         [UIHint("Address")]
         [LocalizedDisplay("*ShippingOriginAddress")]
         public AddressModel ShippingOriginAddress { get; set; } = new();
@@ -38,5 +42,13 @@ namespace Smartstore.Admin.Models
 
         [LocalizedDisplay("*TodayShipmentHour")]
         public int? TodayShipmentHour { get; set; }
+    }
+
+    public partial class ShippingSettingsValidator : SettingModelValidator<ShippingSettingsModel, ShippingSettings>
+    {
+        public ShippingSettingsValidator()
+        {
+            RuleFor(x => x.FreeShippingOverXValue).GreaterThanOrEqualTo(0);
+        }
     }
 }

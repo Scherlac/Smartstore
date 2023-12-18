@@ -193,7 +193,7 @@ namespace Smartstore.Admin.Controllers
                 DisplayOrder = x.DisplayOrder,
                 LimitedToStores = x.LimitedToStores,
                 ShowOnHomePage = x.ShowOnHomePage,
-                EditUrl = Url.Action("Edit", "Category", new { id = x.Id, area = "Admin" }),
+                EditUrl = Url.Action(nameof(Edit), "Category", new { id = x.Id, area = "Admin" }),
                 CreatedOn = Services.DateTimeHelper.ConvertToUserTime(x.CreatedOnUtc, DateTimeKind.Utc),
                 UpdatedOn = Services.DateTimeHelper.ConvertToUserTime(x.UpdatedOnUtc, DateTimeKind.Utc),
                 Breadcrumb = await _categoryService.GetCategoryPathAsync(x, languageId, "<span class='badge badge-secondary'>{0}</span>")
@@ -210,53 +210,26 @@ namespace Smartstore.Admin.Controllers
         [Permission(Permissions.Catalog.Category.Read)]
         public async Task<IActionResult> CategoryTree(int parentId = 0, int searchStoreId = 0)
         {
-            var entityName = nameof(Category);
-            var tree = await _categoryService.GetCategoryTreeAsync(parentId, true);
-            var children = tree.Children;
+            var tree = await _categoryService.GetCategoryTreeAsync(parentId, searchStoreId == 0, searchStoreId);
 
-            if (parentId == 0 && searchStoreId != 0)
-            {
-                var categoryIds = tree.Children
-                    .Where(x => x.Value.LimitedToStores)
-                    .Select(x => x.Value.Id)
-                    .ToArray();
-
-                if (categoryIds.Any())
+            var nodes = tree.Children
+                .Select(x =>
                 {
-                    await _storeMappingService.PrefetchStoreMappingsAsync(entityName, categoryIds);
-                }
+                    var category = x.Value;
 
-                children = await tree.Children
-                    .WhereAwait(async x =>
+                    var nodeValue = new TreeItem
                     {
-                        if (x.Value.LimitedToStores)
-                        {
-                            var storeIds = await _storeMappingService.GetAuthorizedStoreIdsAsync(entityName, x.Value.Id);
-                            return storeIds.Contains(searchStoreId);
-                        }
+                        Name = category.Name,
+                        NumChildren = x.Children.Count,
+                        NumChildrenDeep = x.Flatten(false).Count(),
+                        BadgeText = category.Alias,
+                        Dimmed = !category.Published,
+                        Url = Url.Action(nameof(Edit), "Category", new { id = category.Id })
+                    };
 
-                        return false;
-                    })
-                    .AsyncToList();
-            }
-
-            var nodes = children.Select(x =>
-            {
-                var category = x.Value;
-
-                var nodeValue = new TreeItem
-                {
-                    Name = category.Name,
-                    NumChildren = x.Children.Count,
-                    NumChildrenDeep = x.Flatten(false).Count(),
-                    BadgeText = category.Alias,
-                    Dimmed = !category.Published,
-                    Url = Url.Action("Edit", "Category", new { id = category.Id })
-                };
-
-                return new TreeNode<TreeItem>(nodeValue, category.Id);
-            })
-            .ToList();
+                    return new TreeNode<TreeItem>(nodeValue, category.Id);
+                })
+                .ToList();
 
             return Json(new { nodes });
         }
@@ -346,9 +319,8 @@ namespace Smartstore.Admin.Controllers
 
                 await _db.SaveChangesAsync();
 
-                var validateSlugResult = await category.ValidateSlugAsync(model.SeName, true);
-                await _urlService.ApplySlugAsync(validateSlugResult);
-                model.SeName = validateSlugResult.Slug;
+                var slugResult = await _urlService.SaveSlugAsync(category, model.SeName, category.GetDisplayName(), true);
+                model.SeName = slugResult.Slug;
 
                 await ApplyLocales(model, category);
 
@@ -430,9 +402,8 @@ namespace Smartstore.Admin.Controllers
                 await mapper.MapAsync(model, category);
                 category.ParentId = model.ParentCategoryId;
 
-                var validateSlugResult = await category.ValidateSlugAsync(model.SeName, true);
-                await _urlService.ApplySlugAsync(validateSlugResult);
-                model.SeName = validateSlugResult.Slug;
+                var slugResult = await _urlService.SaveSlugAsync(category, model.SeName, category.GetDisplayName(), true);
+                model.SeName = slugResult.Slug;
 
                 await ApplyLocales(model, category);
                 await _discountService.ApplyDiscountsAsync(category, model?.SelectedDiscountIds, DiscountType.AssignedToCategories);
@@ -647,6 +618,7 @@ namespace Smartstore.Admin.Controllers
                 model.SelectedStoreIds = await _storeMappingService.GetAuthorizedStoreIdsAsync(category);
                 model.SelectedCustomerRoleIds = await _aclService.GetAuthorizedCustomerRoleIdsAsync(category);
                 model.SelectedRuleSetIds = category.RuleSets.Select(x => x.Id).ToArray();
+                model.CategoryUrl = await GetEntityPublicUrlAsync(category);
 
                 var showRuleApplyButton = model.SelectedRuleSetIds.Any();
 
@@ -692,18 +664,6 @@ namespace Smartstore.Admin.Controllers
                 new SelectListItem { Value = "grid", Text = T("Common.Grid"), Selected = model.DefaultViewMode.EqualsNoCase("grid") },
                 new SelectListItem { Value = "list", Text = T("Common.List"), Selected = model.DefaultViewMode.EqualsNoCase("list") }
             };
-
-            ViewBag.BadgeStyles = new List<SelectListItem>
-            {
-                new SelectListItem { Value = "0", Text = "Secondary", Selected = model.BadgeStyle == 0 },
-                new SelectListItem { Value = "1", Text = "Primary", Selected = model.BadgeStyle == 1 },
-                new SelectListItem { Value = "2", Text = "Success", Selected = model.BadgeStyle == 2 },
-                new SelectListItem { Value = "3", Text = "Info", Selected = model.BadgeStyle == 3 },
-                new SelectListItem { Value = "4", Text = "Warning", Selected = model.BadgeStyle == 4 },
-                new SelectListItem { Value = "5", Text = "Danger", Selected = model.BadgeStyle == 5 },
-                new SelectListItem { Value = "6", Text = "Light", Selected = model.BadgeStyle == 6 },
-                new SelectListItem { Value = "7", Text = "Dark", Selected = model.BadgeStyle == 7 }
-            };
         }
 
         private async Task ApplyLocales(CategoryModel model, Category category)
@@ -719,8 +679,7 @@ namespace Smartstore.Admin.Controllers
                 await _localizedEntityService.ApplyLocalizedValueAsync(category, x => x.MetaDescription, localized.MetaDescription, localized.LanguageId);
                 await _localizedEntityService.ApplyLocalizedValueAsync(category, x => x.MetaTitle, localized.MetaTitle, localized.LanguageId);
 
-                var validateSlugResult = await category.ValidateSlugAsync(localized.SeName, localized.Name, false, localized.LanguageId);
-                await _urlService.ApplySlugAsync(validateSlugResult);
+                await _urlService.SaveSlugAsync(category, localized.SeName, localized.Name, false, localized.LanguageId);
             }
         }
 

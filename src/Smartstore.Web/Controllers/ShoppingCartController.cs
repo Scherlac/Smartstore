@@ -275,7 +275,7 @@ namespace Smartstore.Web.Controllers
             var wishlist = await _shoppingCartService.GetCartAsync(customer, ShoppingCartType.Wishlist, storeId);
 
             var model = new WishlistModel();
-            await wishlist.MapAsync(model);
+            await wishlist.MapAsync(model, isOffcanvas: true);
 
             model.ThumbSize = _mediaSettings.MiniCartThumbPictureSize;
 
@@ -351,7 +351,7 @@ namespace Smartstore.Web.Controllers
                     totalsHtml = await InvokeComponentAsync(typeof(OrderTotalsViewComponent), ViewData, new { isEditable = true });
 
                     var sci = model.Items.Where(x => x.Id == sciItemId).FirstOrDefault();
-                    newItemPrice = sci.UnitPrice.ToString();
+                    newItemPrice = sci.Price.UnitPrice.ToString();
                 }
             }
 
@@ -483,7 +483,7 @@ namespace Smartstore.Web.Controllers
             var storeId = Services.StoreContext.CurrentStore.Id;
             var cartType = (ShoppingCartType)shoppingCartTypeId;
 
-            var quantityToAdd = product.OrderMinimumQuantity > 0 ? product.OrderMinimumQuantity : 1;
+            var quantityToAdd = product.GetMinOrderQuantity();
 
             // Product looks good so far, let's try adding the product to the cart (with product attribute validation etc.).
             var addToCartContext = new AddToCartContext
@@ -565,7 +565,7 @@ namespace Smartstore.Web.Controllers
                 }
             }
 
-            var quantity = product.OrderMinimumQuantity;
+            var quantity = product.GetMinOrderQuantity();
             var key1 = $"addtocart_{productId}.EnteredQuantity";
             var key2 = $"addtocart_{productId}.AddToCart.EnteredQuantity";
 
@@ -937,11 +937,7 @@ namespace Smartstore.Web.Controllers
                 });
             }
 
-            var postedFile = Request.Form.Files.FirstOrDefault();
-            if (postedFile == null)
-            {
-                throw new ArgumentException(T("Common.NoFileUploaded"));
-            }
+            var postedFile = Request.Form.Files.FirstOrDefault() ?? throw new ArgumentException(T("Common.NoFileUploaded"));
 
             var download = new Download
             {
@@ -1019,58 +1015,14 @@ namespace Smartstore.Web.Controllers
             var cart = await _shoppingCartService.GetCartAsync(storeId: Services.StoreContext.CurrentStore.Id);
             cart.Customer.GenericAttributes.CheckoutAttributes = await _checkoutAttributeMaterializer.CreateCheckoutAttributeSelectionAsync(query, cart);
 
-            string message = null;
-            var success = false;
-
-            if (discountCouponCode.HasValue())
-            {
-                var discount = await _db.Discounts
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(x => x.CouponCode == discountCouponCode);
-
-                var isDiscountValid = discount != null
-                    && discount.RequiresCouponCode
-                    && await _discountService.IsDiscountValidAsync(discount, cart.Customer, discountCouponCode);
-
-                if (isDiscountValid)
-                {
-                    var discountApplied = true;
-                    var oldCartTotal = await _orderCalculationService.GetShoppingCartTotalAsync(cart);
-
-                    cart.Customer.GenericAttributes.DiscountCouponCode = discountCouponCode;
-
-                    if (oldCartTotal.Total.HasValue)
-                    {
-                        var newCartTotal = await _orderCalculationService.GetShoppingCartTotalAsync(cart);
-                        discountApplied = oldCartTotal.Total != newCartTotal.Total;
-                    }
-
-                    if (discountApplied)
-                    {
-                        success = true;
-                        message = T("ShoppingCart.DiscountCouponCode.Applied");
-                    }
-                    else
-                    {
-                        cart.Customer.GenericAttributes.DiscountCouponCode = null;
-                        message = T("ShoppingCart.DiscountCouponCode.NoMoreDiscount");
-                    }
-                }
-                else
-                {
-                    message = T("ShoppingCart.DiscountCouponCode.WrongDiscount");
-                }
-            }
-            else
-            {
-                message = T("ShoppingCart.DiscountCouponCode.WrongDiscount");
-            }
-
+            var (applied, discount) = await _orderCalculationService.ApplyDiscountCouponAsync(cart, discountCouponCode);
             await _db.SaveChangesAsync();
 
             var model = await cart.MapAsync();
-            model.DiscountBox.Message = message;
-            model.DiscountBox.IsWarning = !success;
+            model.DiscountBox.IsWarning = !applied;
+            model.DiscountBox.Message = applied
+                ? T("ShoppingCart.DiscountCouponCode.Applied")
+                : T(discount == null ? "ShoppingCart.DiscountCouponCode.WrongDiscount" : "ShoppingCart.DiscountCouponCode.NoMoreDiscount");
 
             var discountHtml = await InvokePartialViewAsync("_DiscountBox", model.DiscountBox);
             var cartHtml = await InvokePartialViewAsync("CartItems", model);

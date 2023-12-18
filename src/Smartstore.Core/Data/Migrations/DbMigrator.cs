@@ -50,7 +50,7 @@ namespace Smartstore.Core.Data.Migrations
         /// <returns>The migration instance.</returns>
         protected IMigration CreateMigration(Type migrationClass)
         {
-            Guard.NotNull(migrationClass, nameof(migrationClass));
+            Guard.NotNull(migrationClass);
 
             return (IMigration)_scope.ResolveUnregistered(migrationClass);
         }
@@ -129,13 +129,18 @@ namespace Smartstore.Core.Data.Migrations
         }
 
         /// <summary>
+        /// Runs all pending data seeders that are <see cref="DataSeederStage.Late"/>.
+        /// </summary>
+        public abstract Task RunPendingSeedersAsync(CancellationToken cancelToken = default);
+
+        /// <summary>
         /// Seeds locale resources of pending migrations.
         /// </summary>
         /// <param name="fromVersion">Specifies the version of a migration from which locale resources are to be seeded.</param>
         /// <returns>The number of seeded migrations.</returns>
         public async Task<int> SeedPendingLocaleResourcesAsync(long fromVersion, CancellationToken cancelToken = default)
         {
-            Guard.NotNegative(fromVersion, nameof(fromVersion));
+            Guard.NotNegative(fromVersion);
 
             if (Context is not SmartDbContext db)
             {

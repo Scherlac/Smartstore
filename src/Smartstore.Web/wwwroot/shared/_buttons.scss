@@ -38,7 +38,7 @@ $btn-wide-padding-x-sm: 1.2rem;
     white-space: nowrap;
     align-items: center;
     justify-content: center;
-    gap: 0.6em;
+    gap: 0.5em;
     min-height: var(--btn-height);
 
     > i, 
@@ -71,6 +71,12 @@ $btn-wide-padding-x-sm: 1.2rem;
             color: var(--btn-icon-active-color);
         }
     }
+}
+
+.btn-icon-fix {
+    // Quick fix for directional icons not perfectly aligned with button text
+    position: relative;
+    top: 1px;
 }
 
 
@@ -146,6 +152,10 @@ $btn-wide-padding-x-sm: 1.2rem;
 
     .btn-brand-twitter {
         @include button-variant($clr-brand-twitter, $clr-brand-twitter);
+    }
+
+    .btn-brand-x-twitter {
+        @include button-variant($clr-brand-x-twitter, $clr-brand-x-twitter);
     }
 
     .btn-brand-youtube {
@@ -446,14 +456,14 @@ $btn-wide-padding-x-sm: 1.2rem;
     .btn-3d.btn-#{$color},
     .btn-3d.btn-outline-#{$color} {
         @if $color != "secondary" and $color != "light" {
-            $c: mix($value, #000, 50%);
+            $c: mix($value, $black, 50%);
             --shadow-color-rgb: #{to-rgb($c)};
             --shadow-intensity: 1.8;
         }
 
         @if $color == 'secondary' {
             --btn-hover-bg: #fff;
-            --btn-border-color: #{rgba(#000, 0.1)};
+            --btn-border-color: #{rgba($black, 0.1)};
             --btn-hover-border-color: var(--btn-border-color);
             --btn-active-bg: #{$gray-200};
             --btn-active-border-color: var(--btn-border-color);

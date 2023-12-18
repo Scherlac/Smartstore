@@ -120,33 +120,33 @@
                         <span asp-validation-for="SeoSettings.CanonicalHostNameRule"></span>
                     </div>
                 </div>
-                <div class="robots-container adminRow">
+                <div class="robots-container display-allows adminRow">
                     <div class="adminTitle">
-                        <smart-label asp-for="SeoSettings.ExtraRobotsDisallows" />
+                        <smart-label asp-for="SeoSettings.ExtraRobotsLines" />
+                        <div class="text-muted pr-2">
+                            @T("Admin.Configuration.Settings.GeneralCommon.RobotsHint")
+                        </div>
                     </div>
                     <div class="adminData">
-                        <editor asp-for="SeoSettings.ExtraRobotsDisallows" />
-                        <span asp-validation-for="SeoSettings.ExtraRobotsDisallows"></span>
-                    </div>
-                </div>
-                <div class="robots-container d-none adminRow">
-                    <div class="adminTitle">
-                        <smart-label asp-for="SeoSettings.ExtraRobotsAllows" />
-                    </div>
-                    <div class="adminData">
-                        <editor asp-for="SeoSettings.ExtraRobotsAllows" />
-                        <span asp-validation-for="SeoSettings.ExtraRobotsAllows"></span>
-                    </div>
-                </div>
-                <div class="adminRow">
-                    <div class="adminTitle">
-                    </div>
-                    <div class="adminData">
-                        <button type="button" class="btn btn-secondary robots-toggle-button">
-                            <i class="fa fa-right-left"></i>
-                            <span>@T("Admin.Configuration.Settings.GeneralCommon.DisplayAllows")</span>
-                            <span class="d-none">@T("Admin.Configuration.Settings.GeneralCommon.DisplayDisallows")</span>
-                        </button>
+                        <nav class="nav nav-segmented nav-justified">
+                            <a class="nav-link active" data-toggle="tab" href="#robots-allows">@T("Admin.Configuration.Settings.GeneralCommon.DisplayAllows")</a>
+                            <a class="nav-link" data-toggle="tab" href="#robots-disallows">@T("Admin.Configuration.Settings.GeneralCommon.DisplayDisallows")</a>
+                            <a class="nav-link" data-toggle="tab" href="#robots-additional-lines">@T("Admin.Configuration.Settings.GeneralCommon.DisplayAdditionalLines")</a>
+                        </nav>
+                        <div class="tab-content">
+                            <div id="robots-allows" class="tab-pane active">
+                                <editor asp-for="SeoSettings.ExtraRobotsAllows" />
+                                <span asp-validation-for="SeoSettings.ExtraRobotsAllows"></span>
+                            </div>
+                            <div id="robots-disallows" class="tab-pane">
+                                <editor asp-for="SeoSettings.ExtraRobotsDisallows" />
+                                <span asp-validation-for="SeoSettings.ExtraRobotsDisallows"></span>
+                            </div>
+                            <div id="robots-additional-lines" class="tab-pane">
+                                <editor asp-for="SeoSettings.ExtraRobotsLines" />
+                                <span asp-validation-for="SeoSettings.ExtraRobotsLines"></span>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 
@@ -582,6 +582,15 @@
                     <div class="adminData">
                         <setting-editor asp-for="LocalizationSettings.DisplayRegionInLanguageSelector"></setting-editor>
                         <span asp-validation-for="LocalizationSettings.DisplayRegionInLanguageSelector"></span>
+                    </div>
+                </div>
+                <div class="adminRow">
+                    <div class="adminTitle">
+                        <smart-label asp-for="LocalizationSettings.UseNativeNameInLanguageSelector" />
+                    </div>
+                    <div class="adminData">
+                        <setting-editor asp-for="LocalizationSettings.UseNativeNameInLanguageSelector"></setting-editor>
+                        <span asp-validation-for="LocalizationSettings.UseNativeNameInLanguageSelector"></span>
                     </div>
                 </div>
             </div>
@@ -1127,11 +1136,6 @@
             if (!_.isEmpty(publicKey) && !_.isEmpty(privateKey)) {
                 $('#UseInvisibleReCaptchaWarning').removeClass('d-none');
             }
-        });
-
-        // Toggle robots settings for allow & disallow.
-        $('.robots-toggle-button').click(function () {
-            $('.robots-container, .robots-toggle-button > span').toggleClass("d-none");
         });
 	});
 </script>

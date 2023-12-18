@@ -3,7 +3,7 @@
         <Value>Web API</Value>
     </LocaleResource>
     <LocaleResource Name="Plugins.Description.SmartStore.WebApi" AppendRootKey="false">
-        <Value>Ermöglicht den Datenaustausch mit Smartstore</Value>
+        <Value>Ermöglicht den Datenaustausch mit Smartstore.</Value>
     </LocaleResource>
     <LocaleResource Name="Plugins.Permissions.DisplayName.WebApi" AppendRootKey="false">
         <Value>Web API</Value>
@@ -98,6 +98,9 @@
     </LocaleResource>
     <LocaleResource Name="CreateKeys.Hint">
         <Value>Erstellt API-Zugangsschlüssel für diesen Kunden.</Value>
+    </LocaleResource>
+    <LocaleResource Name="ShowKeys">
+        <Value>Schlüssel anzeigen</Value>
     </LocaleResource>
     <LocaleResource Name="ApiAccess">
         <Value>Zugang zur API</Value>

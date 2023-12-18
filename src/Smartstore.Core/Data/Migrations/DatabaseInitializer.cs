@@ -43,9 +43,9 @@ namespace Smartstore.Core.Data.Migrations
             }
         }
 
-        public Task InitializeDatabaseAsync(Type dbContextType, CancellationToken cancelToken = default)
+        protected Task InitializeDatabaseAsync(Type dbContextType, CancellationToken cancelToken = default)
         {
-            Guard.NotNull(dbContextType, nameof(dbContextType));
+            Guard.NotNull(dbContextType);
             Guard.IsAssignableFrom<DbContext>(dbContextType);
 
             var migrator = _scope.Resolve(typeof(DbMigrator<>).MakeGenericType(dbContextType)) as DbMigrator;
@@ -54,7 +54,7 @@ namespace Smartstore.Core.Data.Migrations
 
         protected virtual async Task InitializeDatabaseAsync(DbMigrator migrator, CancellationToken cancelToken = default)
         {
-            Guard.NotNull(migrator, nameof(migrator));
+            Guard.NotNull(migrator);
 
             var context = migrator.Context;
             var type = context.GetInvariantType();
@@ -115,6 +115,32 @@ namespace Smartstore.Core.Data.Migrations
                     }
                 }
             }
+        }
+
+        public virtual async Task RunPendingSeedersAsync(CancellationToken cancelToken = default)
+        {
+            if (!ModularState.Instance.HasChanged)
+            {
+                // (perf) ignore modules, they did not change since last migration.
+                await RunPendingSeedersAsync(typeof(SmartDbContext), cancelToken);
+            }
+            else
+            {
+                var contextTypes = _typeScanner.FindTypes<DbContext>().ToArray();
+                foreach (var contextType in contextTypes)
+                {
+                    await RunPendingSeedersAsync(contextType, cancelToken);
+                }
+            }
+        }
+
+        protected Task RunPendingSeedersAsync(Type dbContextType, CancellationToken cancelToken = default)
+        {
+            Guard.NotNull(dbContextType);
+            Guard.IsAssignableFrom<DbContext>(dbContextType);
+
+            var migrator = _scope.Resolve(typeof(DbMigrator<>).MakeGenericType(dbContextType)) as DbMigrator;
+            return migrator.RunPendingSeedersAsync(cancelToken);
         }
     }
 }

@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using FluentValidation;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Smartstore.Core.Checkout.Cart;
 
@@ -73,6 +74,9 @@ namespace Smartstore.Admin.Models
         [LocalizedDisplay("*ShowLinkedAttributeValueQuantity")]
         public bool ShowLinkedAttributeValueQuantity { get; set; }
 
+        [LocalizedDisplay("*MaxQuantityInputDropdownItems")]
+        public int MaxQuantityInputDropdownItems { get; set; }
+
         [LocalizedDisplay("*ShowCommentBox")]
         public bool ShowCommentBox { get; set; }
 
@@ -98,12 +102,22 @@ namespace Smartstore.Admin.Models
         public bool AddProductsToBasketInSinglePositions { get; set; }
     }
 
-
     public class ShoppingCartSettingsLocalizedModel : ILocalizedLocaleModel
     {
         public int LanguageId { get; set; }
 
         [LocalizedDisplay("Admin.Configuration.Settings.ShoppingCart.ThirdPartyEmailHandOverLabel")]
         public string ThirdPartyEmailHandOverLabel { get; set; }
+    }
+
+    public partial class ShoppingCartSettingsValidator : SettingModelValidator<ShoppingCartSettingsModel, ShoppingCartSettings>
+    {
+        public ShoppingCartSettingsValidator()
+        {
+            RuleFor(x => x.MaximumShoppingCartItems).GreaterThan(0);
+            RuleFor(x => x.MaximumWishlistItems).GreaterThan(0);
+            RuleFor(x => x.CrossSellsNumber).GreaterThanOrEqualTo(0);
+            RuleFor(x => x.MaxQuantityInputDropdownItems).GreaterThanOrEqualTo(0);
+        }
     }
 }

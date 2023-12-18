@@ -16,6 +16,7 @@
 	overflow-x: hidden;
 	overflow-y: auto;
 	padding: $input-padding-y $input-padding-x;
+    border-radius: $input-border-radius;
 	cursor: default;
 
 	&.empty {
@@ -24,88 +25,102 @@
 	}
 }
 
+
+//
+// Common
+// --------------------------------------------------------------
+
+.note-btn {
+    --btn-padding-x: 9px;
+}
+
+.note-btn > i,
+.note-btn > svg {
+    //font-size: 16px !important;
+    fill: currentColor;
+}
+
+.note-btn > svg {
+    height: 14px;
+}
+
 .note-editor {
-	border-color: $input-border-color !important;
-	border-radius: $input-border-radius !important;
-
-    &:focus-within,
-    &:focus,
-    &.focus {
-        z-index: $zindex-sticky - 1;
-        border-color: $input-focus-border-color !important;
-    }
-
-	&.focus {
-		// Redundant, but "Edge" will skip :focus-within selector
-        border-color: $input-focus-border-color !important;
-	}
-
-    .note-toolbar-wrapper {
-        position: relative;
-    }
-
 	.note-toolbar {
-		display: flex;
-		flex-wrap: wrap;
+        display: flex;
+	    flex-wrap: wrap;
 
         .note-btn-group {
+            column-gap: 1px;
             //z-index: $zindex-dropdown - 1;
         }
 
-		> .note-btn-group {
-			border: 0 solid rgba(#000, 0.12);
-			border-inline-end-width: 1px;
-			padding-inline-end: 5px;
-		}
-
-		> .note-btn-group:last-of-type {
-			border-inline-end-width: 0;
-			padding-inline-end: 0;
-		}
-
         .btn.note-btn {
-            @include button-flat();
+            min-width: 32px;
         }
 
-		.dropdown-toggle:after {
-			margin-inline-start: 0.5em;
-			opacity: 0.6;
-		}
+        > .note-btn-group {
+            border: 0 solid rgba($black, 0.12);
+            border-inline-end-width: 1px;
+            padding-inline-end: 5px;
+        }
 
-		.dropdown-toggle:empty:after {
-			margin-inline-start: 0;
-		}
+        > .note-btn-group:last-of-type {
+            border-inline-end-width: 0;
+            padding-inline-end: 0;
+        }
+
+        > .note-btn-group > .note-btn,
+        > .note-btn-group > .note-btn-group > .note-btn {
+            // Apply flat style only to buttons in toolbar
+            @include button-flat();
+            margin-inline-start: 0;
+        }
+
+        .note-codeview-keep.active > .fa-expand:before {
+            // Swap icon: expand --> compress
+            content: "\f066";
+        }
+
+        .note-recent-color {
+            display: inline-block;
+            border: 1px solid rgba($black, 0.12);
+            padding-inline: 2px;
+            border-radius: 3px;
+        }
+
+        .note-current-fontsize {
+            display: inline-block;
+            width: 16px;
+        }
 
 		.note-para > .btn-group:last-child .dropdown-menu.show {
 			// Fix: the para popover button groups should not wrap
 			display: flex !important;
 		}
 
-		.dropdown-style > .dropdown-item > * {
-			// Fix: Summernote does not remove the BS4 bottom margin of para style dropdown items
-			margin-bottom: 0;
-		}
-
-		.note-color + .btn-group > .btn {
+		.note-font > .btn-group:first-child > .btn {
 			// Fix: the fontsize button width should not change (toolbar flickers)
 			padding-inline: 0.5rem;
-			min-width: 50px;
+			width: 112px;
+            max-width: 112px;
+            justify-content: space-between;
+            font-weight: 400;
+
+            > .note-current-fontname {
+                @include text-truncate;
+            }
 		}
 
 		.scrollable-menu {
+            --scrollbar-track-color: #fff;
+            --scrollbar-track-hover-color: #fff;
 			height: auto;
 			max-height: 340px;
-			width: 360px;
+			min-width: 280px;
 			overflow-x: hidden;
-			padding: 0 !important
 		}
 
 		.btn-group-cssclass .dropdown-menu {
-			&.show {
-				display: flex;
-				flex-direction: column;
-			}
-
 			.dropdown-item {
 				position: relative;
 
@@ -127,6 +142,10 @@
 	}
 
 	.note-editable {
+        a {
+            text-decoration: underline;
+        }
+
 		table:not(.table-bordered):not([border]),
 		table:not(.table-bordered)[border='0'] {
 			border-collapse: collapse;
@@ -136,4 +155,19 @@
 			}
 		}
 	}
+
+	.note-dropdown-menu > .dropdown-item > * {
+		// Overwrite all reboot margins in Summernote dropdown items
+		margin-bottom: 0;
+	}
+
+    .dropdown-cssclass > .dropdown-item {
+        > .d-block {
+            width: 100%;
+        }
+    }
+
+    .dropdown-fontsize {
+        min-width: 92px;
+    }
 }

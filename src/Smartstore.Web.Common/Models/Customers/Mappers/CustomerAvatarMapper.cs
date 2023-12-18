@@ -16,10 +16,11 @@ namespace Smartstore.Web.Models.Customers
         /// <returns><see cref="CustomerAvatarModel"/>.</returns>
         public static async Task<CustomerAvatarModel> MapAsync(this Customer entity,
             string userName = null,
-            bool largeAvatar = false)
+            bool largeAvatar = false,
+            bool displayRing = false)
         {
             var model = new CustomerAvatarModel();
-            await MapAsync(entity, model, userName, largeAvatar);
+            await MapAsync(entity, model, userName, largeAvatar, displayRing);
 
             return model;
         }
@@ -34,11 +35,13 @@ namespace Smartstore.Web.Models.Customers
         public static async Task MapAsync(this Customer entity,
             CustomerAvatarModel model,
             string userName = null,
-            bool largeAvatar = false)
+            bool largeAvatar = false,
+            bool displayRing = false)
         {
             dynamic parameters = new ExpandoObject();
             parameters.UserName = userName;
             parameters.LargeAvatar = largeAvatar;
+            parameters.DisplayRing = displayRing;
 
             await MapperFactory.MapAsync(entity, model, parameters);
         }
@@ -62,13 +65,14 @@ namespace Smartstore.Web.Models.Customers
 
         public override async Task MapAsync(Customer from, CustomerAvatarModel to, dynamic parameters = null)
         {
-            Guard.NotNull(from, nameof(from));
-            Guard.NotNull(to, nameof(to));
+            Guard.NotNull(from);
+            Guard.NotNull(to);
 
             await _db.LoadCollectionAsync(from, x => x.CustomerRoleMappings, false, x => x.Include(y => y.CustomerRole));
 
             to.Id = from.Id;
             to.Large = (bool)(parameters.LargeAvatar == true);
+            to.DisplayRing = (bool)(parameters.DisplayRing == true);
             to.UserName = parameters.UserName as string;
             to.AvatarPictureSize = _mediaSettings.AvatarPictureSize;
 
@@ -81,30 +85,30 @@ namespace Smartstore.Web.Models.Customers
             {
                 to.AllowViewingProfiles = _customerSettings.AllowViewingProfiles;
 
+                var userName = "?";
+
                 if (from.FirstName.HasValue())
                 {
-                    to.AvatarLetter = from.FirstName.First();
+                    userName = from.FirstName;
                 }
                 else if (from.LastName.HasValue())
                 {
-                    to.AvatarLetter = from.LastName.First();
+                    userName = from.LastName;
                 }
                 else if (from.FullName.HasValue())
                 {
-                    to.AvatarLetter = from.FullName.First();
+                    userName = from.FullName;
                 }
                 else if (from.Username.HasValue())
                 {
-                    to.AvatarLetter = from.Username.First();
+                    userName = from.Username;
                 }
                 else if (to.UserName.HasValue())
                 {
-                    to.AvatarLetter = to.UserName.First();
+                    userName = to.UserName;
                 }
-                else
-                {
-                    to.AvatarLetter = '?';
-                }
+
+                to.AvatarLetter = userName.ToUpper().TrimStart()[0];
 
                 if (_customerSettings.AllowCustomersToUploadAvatars)
                 {

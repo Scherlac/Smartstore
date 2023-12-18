@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace Smartstore.PayPal.Components
 {
     /// <summary>
-    /// Renders PayPal hosted fields for credit card processing & and input elements for address data.
+    /// Renders PayPal hosted fields for credit card processing.
     /// </summary>
     public class PayPalCreditCardViewComponent : PayPalViewComponentBase
     {
@@ -12,7 +12,8 @@ namespace Smartstore.PayPal.Components
         {
             var model = new PublicCreditCardModel
             {
-                HasClientToken = HttpContext.Session.GetString("PayPalClientToken").HasValue()
+                HasClientToken = HttpContext.Session.GetString("PayPalClientToken").HasValue(),
+                RouteIdent = RouteIdent
             };
 
             return View(model);

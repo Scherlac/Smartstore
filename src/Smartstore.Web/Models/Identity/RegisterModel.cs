@@ -47,14 +47,7 @@ namespace Smartstore.Web.Models.Identity
         public bool DateOfBirthEnabled { get; set; }
 
         [LocalizedDisplay("*DateOfBirth")]
-        public int? DateOfBirthDay { get; set; }
-
-        [LocalizedDisplay("*DateOfBirth")]
-        public int? DateOfBirthMonth { get; set; }
-
-        [LocalizedDisplay("*DateOfBirth")]
-        public int? DateOfBirthYear { get; set; }
-
+        public DateTime? DateOfBirth { get; set; }
         public bool CompanyEnabled { get; set; }
         public bool CompanyRequired { get; set; }
 
@@ -145,10 +138,16 @@ namespace Smartstore.Web.Models.Identity
             {
                 RuleFor(x => x.FirstName).NotEmpty();
             }
+
+            RuleFor(x => x.FirstName).ValidName(T);
+
             if (customerSettings.LastNameRequired)
             {
                 RuleFor(x => x.LastName).NotEmpty();
             }
+
+            RuleFor(x => x.LastName).ValidName(T);
+
             if (customerSettings.CompanyRequired && customerSettings.CompanyEnabled)
             {
                 RuleFor(x => x.Company).NotEmpty();

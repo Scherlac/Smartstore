@@ -5,10 +5,13 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
+using Smartstore.Core;
 using Smartstore.Core.Catalog.Attributes;
 using Smartstore.Core.Checkout.Cart;
 using Smartstore.Core.Checkout.Orders;
 using Smartstore.Core.Checkout.Payment;
+using Smartstore.Core.Common;
+using Smartstore.Core.Common.Services;
 using Smartstore.Core.Data;
 using Smartstore.Core.Identity;
 using Smartstore.Core.Stores;
@@ -25,27 +28,36 @@ namespace Smartstore.PayPal.Controllers
         private readonly ICheckoutStateAccessor _checkoutStateAccessor;
         private readonly IShoppingCartService _shoppingCartService;
         private readonly IOrderProcessingService _orderProcessingService;
+        private readonly IRoundingHelper _roundingHelper;
         private readonly PayPalHttpClient _client;
         private readonly PayPalSettings _settings;
+        private readonly Currency _primaryCurrency;
 
         public PayPalController(
             SmartDbContext db,
             ICheckoutStateAccessor checkoutStateAccessor,
             IShoppingCartService shoppingCartService,
             IOrderProcessingService orderProcessingService,
+            IRoundingHelper roundingHelper,
             PayPalHttpClient client,
-            PayPalSettings settings)
+            PayPalSettings settings,
+            ICurrencyService currencyService)
         {
             _db = db;
             _checkoutStateAccessor = checkoutStateAccessor;
             _shoppingCartService = shoppingCartService;
             _orderProcessingService = orderProcessingService;
+            _roundingHelper = roundingHelper;
             _client = client;
             _settings = settings;
+
+            // INFO: Services wasn't resolved anymore in ctor.
+            //_primaryCurrency = Services.CurrencyService.PrimaryCurrency;
+            _primaryCurrency = currencyService.PrimaryCurrency;
         }
 
         [HttpPost]
-        public async Task<IActionResult> InitTransaction(ProductVariantQuery query, bool? useRewardPoints, string orderId)
+        public async Task<IActionResult> InitTransaction(ProductVariantQuery query, bool? useRewardPoints, string orderId, string routeIdent)
         {
             var success = false;
             var message = string.Empty;
@@ -66,17 +78,26 @@ namespace Smartstore.PayPal.Controllers
             {
                 var checkoutState = _checkoutStateAccessor.CheckoutState;
 
-                // Set flag which indicates to skip payment selection.
-                checkoutState.CustomProperties["PayPalButtonUsed"] = true;
-
+                // Only set this if we're not on payment page.
+                if (routeIdent != "Checkout.PaymentMethod")
+                {
+                    checkoutState.CustomProperties["PayPalButtonUsed"] = true;
+                }
+                
                 // Store order id temporarily in checkout state.
                 checkoutState.CustomProperties["PayPalOrderId"] = orderId;
+
+                var paypalCheckoutState = checkoutState.GetCustomState<PayPalCheckoutState>();
+                paypalCheckoutState.PayPalOrderId = orderId;
 
                 var session = HttpContext.Session;
 
                 if (!session.TryGetObject<ProcessPaymentRequest>("OrderPaymentInfo", out var processPaymentRequest) || processPaymentRequest == null)
                 {
-                    processPaymentRequest = new ProcessPaymentRequest();
+                    processPaymentRequest = new ProcessPaymentRequest
+                    {
+                        OrderGuid = Guid.NewGuid()
+                    };
                 }
 
                 processPaymentRequest.PayPalOrderId = orderId;
@@ -99,7 +120,19 @@ namespace Smartstore.PayPal.Controllers
         [HttpPost]
         public async Task<IActionResult> CreateOrder(string paymentSource)
         {
-            var orderMessage = await _client.GetOrderForStandardProviderAsync(isExpressCheckout: true);
+            var session = HttpContext.Session;
+
+            if (!session.TryGetObject<ProcessPaymentRequest>("OrderPaymentInfo", out var processPaymentRequest) || processPaymentRequest == null)
+            {
+                processPaymentRequest = new ProcessPaymentRequest
+                {
+                    OrderGuid = Guid.NewGuid()
+                };
+            }
+
+            session.TrySetObject("OrderPaymentInfo", processPaymentRequest);
+
+            var orderMessage = await _client.GetOrderForStandardProviderAsync(processPaymentRequest.OrderGuid.ToString(), isExpressCheckout: true);
             var response = await _client.CreateOrderAsync(orderMessage);
             var rawResponse = response.Body<object>().ToString();
             dynamic jResponse = JObject.Parse(rawResponse);
@@ -396,7 +429,7 @@ namespace Smartstore.PayPal.Controllers
             {
                 case "created":
                     if (decimal.TryParse(resource.Amount?.Value, NumberStyles.Any, CultureInfo.InvariantCulture, out var authorizedAmount)
-                        && authorizedAmount == Math.Round(order.OrderTotal, 2)
+                        && authorizedAmount == _roundingHelper.Round(order.OrderTotal, 2, _primaryCurrency.MidpointRounding)
                         && order.CanMarkOrderAsAuthorized())
                     {
                         order.AuthorizationTransactionId = resource.Id;
@@ -431,7 +464,7 @@ namespace Smartstore.PayPal.Controllers
                 case "completed":
                     if (decimal.TryParse(resource.Amount?.Value, NumberStyles.Any, CultureInfo.InvariantCulture, out var capturedAmount))
                     {
-                        if (order.CanMarkOrderAsPaid() && capturedAmount == Math.Round(order.OrderTotal, 2))
+                        if (order.CanMarkOrderAsPaid() && capturedAmount == _roundingHelper.Round(order.OrderTotal, 2, _primaryCurrency.MidpointRounding))
                         {
                             order.CaptureTransactionId = resource.Id;
                             order.CaptureTransactionResult = status;
@@ -447,7 +480,8 @@ namespace Smartstore.PayPal.Controllers
 
                 case "declined":
                     order.CaptureTransactionResult = status;
-                    order.OrderStatus = OrderStatus.Cancelled;
+                    order.PaymentStatus = PaymentStatus.Voided;
+                    await _orderProcessingService.CancelOrderAsync(order, true);
                     break;
 
                 case "refunded":
@@ -465,7 +499,7 @@ namespace Smartstore.PayPal.Controllers
                 case "completed":
                     if (decimal.TryParse(resource.Amount?.Value, NumberStyles.Any, CultureInfo.InvariantCulture, out var capturedAmount))
                     {
-                        if (order.CanMarkOrderAsPaid() && capturedAmount == Math.Round(order.OrderTotal, 2))
+                        if (order.CanMarkOrderAsPaid() && capturedAmount == _roundingHelper.Round(order.OrderTotal, 2, _primaryCurrency.MidpointRounding))
                         {
                             order.CaptureTransactionId = resource.Id;
                             order.CaptureTransactionResult = status;

@@ -1,4 +1,5 @@
 ﻿using Autofac;
+using Smartstore.Core.Checkout.Affiliates.Rules;
 using Smartstore.Core.Checkout.Attributes;
 using Smartstore.Core.Checkout.Cart;
 using Smartstore.Core.Checkout.GiftCards;
@@ -24,6 +25,13 @@ namespace Smartstore.Core.Bootstrapping
             services.AddHttpClient<PdfInvoiceHttpClient>()
                 .AddSmartstoreUserAgent()
                 .PropagateCookies(CookieNames.Identity, CookieNames.Visitor)
+                .ConfigureHttpClient(client =>
+                {
+                    client.Timeout = TimeSpan.FromSeconds(10);
+                });
+
+            services.AddHttpClient<ViesTaxationHttpClient>()
+                .AddSmartstoreUserAgent()
                 .ConfigureHttpClient(client =>
                 {
                     client.Timeout = TimeSpan.FromSeconds(10);
@@ -62,6 +70,7 @@ namespace Smartstore.Core.Bootstrapping
             builder.RegisterType<PaymentMethodRuleOptionsProvider>().As<IRuleOptionsProvider>().InstancePerLifetimeScope();
             builder.RegisterType<ShippingRateComputationMethodRuleOptionsProvider>().As<IRuleOptionsProvider>().InstancePerLifetimeScope();
             builder.RegisterType<ShippingMethodRuleOptionsProvider>().As<IRuleOptionsProvider>().InstancePerLifetimeScope();
+            builder.RegisterType<AffiliateRuleOptionsProvider>().As<IRuleOptionsProvider>().InstancePerLifetimeScope();
         }
     }
 }

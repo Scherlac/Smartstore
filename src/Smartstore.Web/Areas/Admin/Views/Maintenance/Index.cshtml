@@ -73,6 +73,8 @@
                             <editor asp-for="DeleteGuests.OnlyWithoutShoppingCart" />
                         </div>
                     </div>
+                    <span asp-validation-for="DeleteGuests.StartDate"></span>
+                    <span asp-validation-for="DeleteGuests.EndDate"></span>
                 </div>
 
             </div>
@@ -99,7 +101,43 @@
                         <smart-label asp-for="DeleteExportedFiles.EndDate" />
                         <editor asp-for="DeleteExportedFiles.EndDate" />
                     </div>
+                    <span asp-validation-for="DeleteExportedFiles.StartDate"></span>
+                    <span asp-validation-for="DeleteExportedFiles.EndDate"></span>
                 </div>
+            </div>
+        </div>
+
+        @* TreePaths *@
+        <div class="card mb-4">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h5 class="card-title">
+                        @T("Admin.System.Maintenance.TreePaths.Title")
+                    </h5>
+                    <button type="submit" id="rebuild-tree-paths" class="btn btn-secondary btn-to-primary confirm" style="width: 200px">
+                        <i class="far fa-hammer"></i>
+                        <span>@T("Admin.System.Maintenance.TreePaths.Rebuild")</span>
+                    </button>
+                </div>
+                <div class="row">
+                    <div class="col-auto">
+                        <div class="text-muted" style="margin-right: 220px">
+                            @T("Admin.System.Maintenance.TreePaths.Hint")
+                        </div>
+                        <div id="rebuild-tree-success" class="alert alert-success d-none mt-3 mb-0"></div>
+                    </div>
+                </div>
+                <script>
+                    $(function () {
+                        $(document).on("click", "#rebuild-tree-paths", function (e) {
+                            e.preventDefault();
+
+                            $.get("@Url.Action("RebuildTreePaths")", function (data) {
+                                $("#rebuild-tree-success").text(data).removeClass("d-none");
+                            });
+                        });
+                    });
+                </script>
             </div>
         </div>
 

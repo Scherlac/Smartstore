@@ -148,8 +148,7 @@ namespace Smartstore.Core.Catalog.Attributes
                     .OrderBy(x => x.DisplayOrder);
 
                 var attributes = await query.ToListAsync();
-
-                return attributes.ToList();
+                return attributes;
             });
 
             return result;
@@ -226,7 +225,7 @@ namespace Smartstore.Core.Catalog.Attributes
                     case AttributeControlType.TextBox:
                     case AttributeControlType.MultilineTextbox:
                     {
-                        var value = string.Join(",", selectedItems.Select(x => x.Value));
+                        var value = string.Join(',', selectedItems.Select(x => x.Value));
                         if (value.HasValue())
                         {
                             selection.AddAttributeValue(pva.Id, value);
@@ -238,7 +237,7 @@ namespace Smartstore.Core.Catalog.Attributes
                         var firstItemDate = selectedItems.FirstOrDefault()?.Date;
                         if (firstItemDate.HasValue)
                         {
-                            selection.AddAttributeValue(pva.Id, firstItemDate.Value.ToString("D"));
+                            selection.AddAttributeValue(pva.Id, firstItemDate.Value.ToStringInvariant());
                         }
                         break;
 
@@ -336,7 +335,7 @@ namespace Smartstore.Core.Catalog.Attributes
             ProductVariantAttributeSelection selection,
             ProductVariantAttributeCombination combination = null)
         {
-            Guard.NotNull(product, nameof(product));
+            Guard.NotNull(product);
 
             combination ??= await FindAttributeCombinationAsync(product.Id, selection);
 
