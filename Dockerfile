@@ -52,6 +52,7 @@ EXPOSE 443
 ENV ASPNETCORE_URLS "http://+:80;https://+:443"
 WORKDIR /app
 COPY --from=build /app/release/publish .
+COPY /packages .
 
 
 ENTRYPOINT ["./Smartstore.Web", "--urls", "http://0.0.0.0:80"]
